@@ -4220,7 +4220,18 @@ window.createCatKit = function(THREE) {
           this.speed = cv;
           this.vel.copy(J.dir).multiplyScalar(cv);
         } else if (J.slip || !this.feet.some((x) => x.swing) || J.t > (J.chain ? 0.35 : 2.5)) {
-          go(J.flat ? "crouch" : "lean");
+          const climbJ = J.up && J.step && (J.hB < 0.5 || J.hole);
+          if (!J.flat && !climbJ && !J.slip && Math.abs(J.B.y - this.chestG.y) < 0.3) {
+            const LT = this.planLean();
+            if (!LT.full && LT.s < 0.9) {
+              J.low = true;
+              J.hop = true;
+              go("crouch");
+            } else {
+              J.leanTgt = LT;
+              go("lean");
+            }
+          } else go(J.flat ? "crouch" : "lean");
         }
       } else if (J.phase === "lean") {
         if (!J.leanTgt) J.leanTgt = this.planLean();
@@ -4245,8 +4256,8 @@ window.createCatKit = function(THREE) {
           go("crouch");
         }
       } else if (J.phase === "crouch") {
-        this.postT.crouch = J.flat ? 0.45 : 1;
-        if (J.t > (J.flat ? 0.12 : J.up ? J.low ? 0.18 : 0.38 : 0.2)) {
+        this.postT.crouch = J.flat ? 0.45 : J.hop ? 0.75 : 1;
+        if (J.t > (J.flat ? 0.12 : J.hop ? 0.2 : J.up ? J.low ? 0.18 : 0.38 : 0.2)) {
           const C0 = this.chestG.clone().lerp(this.pelvisG, 0.5).addScaledVector(UP, 0.115);
           const C1 = J.hindL.clone().lerp(J.frontL, 0.5).addScaledVector(UP, 0.165);
           const edge = J.up && !J.flat ? v(J.B.x, J.B.y + 0.13, J.B.z) : null;
