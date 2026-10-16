@@ -375,7 +375,9 @@
     d.addEventListener('fullscreenchange', sync); d.addEventListener('webkitfullscreenchange', sync);
     // 全画面の間は上の段を逃がす。つまみで呼び戻し、上の段を触らずに 4 秒たったらまた逃がす
     var tab = d.getElementById('fsTab'), tt = 0;
-    function tuck(later) { clearTimeout(tt); tt = setTimeout(function () { if (cur()) d.body.classList.add('fsTuck'); }, later); }
+    // 2026-10-16 Naoya「アイコンがフレームアウト」で自動で逃がすのをやめた（仕組みは残す。TUCK を true で戻る）
+    var TUCK = false;
+    function tuck(later) { clearTimeout(tt); if (!TUCK) return; tt = setTimeout(function () { if (cur()) d.body.classList.add('fsTuck'); }, later); }
     d.addEventListener('fullscreenchange', function () { if (cur()) tuck(1500); else { clearTimeout(tt); d.body.classList.remove('fsTuck'); } });
     d.addEventListener('webkitfullscreenchange', function () { if (cur()) tuck(1500); else { clearTimeout(tt); d.body.classList.remove('fsTuck'); } });
     if (tab) tab.addEventListener('click', function () { d.body.classList.remove('fsTuck'); tuck(4000); });
