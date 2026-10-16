@@ -4224,7 +4224,9 @@ window.createCatKit = function(THREE) {
           const climbJ = J.up && J.step && (J.hB < 0.5 || J.hole);
           if (!J.flat && !climbJ && !J.slip && Math.abs(J.B.y - this.chestG.y) < 0.3) {
             const LT = this.planLean();
-            if (!LT.full && LT.s < 0.9) {
+            const fm = this.feet[0].pos.clone().lerp(this.feet[1].pos, 0.5);
+            const reach = Math.hypot(J.B.x - fm.x, J.B.z - fm.z);
+            if (!LT.full && LT.s < 0.9 || reach > 0.2) {
               J.low = true;
               J.hop = true;
               go("crouch");
