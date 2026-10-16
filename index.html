@@ -421,7 +421,7 @@ document.body.classList.add('mobile');   /* 2026-10-13 Naoya：PC もスマホ�
 </div>
 <div id="catedit" class="card"><div id="cats1"></div></div>
 <div id="credit">DESIGNED BY NEKONOMACHIKADO</div>
-<div id="ver">ver. 1</div>
+<div id="ver">ver. 2</div>
 <div id="headline"></div>
 <div id="veil"><img id="veilImg" alt="" src="sites/case1_thumb.cb050618f6.jpg"><div id="veilLoad"><div>読み込み中</div><div class="bar none"><i></i></div></div></div>
 <button id="tourPrev" class="tourbtn" aria-label="前のモデル"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 L8 12 L15 19"/></svg></button>
@@ -2861,11 +2861,12 @@ window.createCatKit = function(THREE) {
       if (c.pivot || c.tight || c.tightLen && c.s < c.tightLen) vt = Math.min(vt, 0.32 * this.lowTurnK());
       const pass = this.passPlan(c);
       const narrow = this.isNarrow();
+      if (this._slowUntil > this.t) vt = Math.min(vt, 0.06);
       if (!(typeof window !== "undefined" && window.__noLookAhead) && this.world.occupied && !(this.retreatUntil > this.t) && (this._lookT = (this._lookT || 0) - dt) <= 0) {
         this._lookT = 0.2;
         const W = this.world, f0 = horiz(this.fwd).normalize();
         let hitO = null, narrowAhead = narrow;
-        for (let d2 = 0.15; d2 <= 1 && !hitO; d2 += 0.15) {
+        for (let d2 = 0.15; d2 <= 1.5 && !hitO; d2 += 0.15) {
           const u = clamp((c.s + d2) / c.len, 0, 1), q = c.curve.getPointAt(u), tg = horiz(c.curve.getTangentAt(u)).normalize();
           if (!narrowAhead && this.isNarrow(q, tg)) narrowAhead = true;
           const o = W.occupied(q, 0.18, this);
@@ -2873,10 +2874,15 @@ window.createCatKit = function(THREE) {
           if (u >= 1) break;
         }
         if (hitO && narrowAhead && !(hitO.retreatUntil > hitO.t)) {
-          const mine = this.retreatFrom(hitO);
-          if (mine) {
-            hitO.retreatFrom(this);
-            return;
+          const yielder = this.id > hitO.id ? this : hitO, stayer = yielder === this ? hitO : this;
+          if (typeof window !== "undefined" && window.__bothRetreat) {
+            if (this.retreatFrom(hitO)) {
+              hitO.retreatFrom(this);
+              return;
+            }
+          } else if (yielder.retreatFrom(stayer)) {
+            stayer._slowUntil = stayer.t + 2;
+            if (yielder === this) return;
           }
         }
       }
@@ -2887,7 +2893,7 @@ window.createCatKit = function(THREE) {
         const follow = o && !o.jump && o.state === "move" && o.speed > 0.1 && dot > 0.3;
         if (o && (!o.jump || prep) && !follow) {
           const mine = this.retreatFrom(o);
-          if (mine && !o.jump && o.state === "move" && dot < -0.3 && !(o.retreatUntil > o.t) && o.isNarrow()) o.retreatFrom(this);
+          if (mine && !o.jump && o.state === "move") o._slowUntil = o.t + 2;
           if (mine) return;
         }
       }
@@ -2914,6 +2920,14 @@ window.createCatKit = function(THREE) {
         if (blocked === this.passCat) {
           blocked = null;
           vt = Math.min(vt, 0.22);
+        }
+      }
+      const smoothPass = !(typeof window !== "undefined" && window.__noSmoothPass);
+      if (smoothPass) {
+        if (blocked) this._blkT = 0.3;
+        else if (this._blkT > 0) {
+          this._blkT -= dt;
+          vt = 0;
         }
       }
       if (blocked) {
@@ -3020,7 +3034,7 @@ window.createCatKit = function(THREE) {
       this.blockT = 0;
       if (headOn && this.isNarrow()) {
         if (this.retreatFrom(o)) {
-          if (o.state === "move" && !(o.retreatUntil > o.t)) o.retreatFrom(this);
+          if (o.state === "move") o._slowUntil = o.t + 2;
           return true;
         }
         const nb = this.plan.length ? this.plan[0].b : this.cur && this.cur.b;
@@ -3107,7 +3121,7 @@ window.createCatKit = function(THREE) {
       const w = this.world, nav = w.nav, k0 = w.nearestNode(this.chestG, 0.3);
       if (k0 < 0) return false;
       const back = horiz(this.fwd).normalize().negate();
-      let best = -1, bs = -Infinity;
+      const cands = [];
       for (let k = 0; k < nav.nodes.length; k++) {
         if (nav.comp && nav.comp[k] !== nav.comp[k0]) continue;
         const n = nav.nodes[k], dx = n.x - this.chestG.x, dz = n.z - this.chestG.z, d = Math.hypot(dx, dz);
@@ -3115,10 +3129,36 @@ window.createCatKit = function(THREE) {
         const dot = (dx * back.x + dz * back.z) / d;
         if (dot < 0.5) continue;
         if (w.occupied && w.occupied(v(n.x, n.y, n.z), 0.35, this)) continue;
-        const sc = dot + Math.min(d, 1.5) * 0.3 + Math.random() * 0.2;
-        if (sc > bs) {
-          bs = sc;
+        cands.push([dot + Math.min(d, 1.5) * 0.3 + Math.random() * 0.2, k, d]);
+      }
+      cands.sort((a, b) => b[0] - a[0]);
+      let best = -1;
+      for (const [, k, d] of cands.slice(0, 8)) {
+        const path = w.findPath(k0, k);
+        if (!path || path.length < 2) continue;
+        let L = 0, ok = true, dirOK = false;
+        for (let i = 1; i < path.length; i++) {
+          const a = nav.nodes[path[i - 1]], b = nav.nodes[path[i]];
+          const e = nav.adj[path[i - 1]].find((x) => x.to === path[i]);
+          if (e && e.jump && i <= 3) {
+            ok = false;
+            break;
+          }
+          L += Math.hypot(b.x - a.x, b.z - a.z);
+          if (!dirOK) {
+            const ex = b.x - this.chestG.x, ez = b.z - this.chestG.z, ed = Math.hypot(ex, ez);
+            if (ed >= 0.3) {
+              if ((ex * back.x + ez * back.z) / ed < 0.5) {
+                ok = false;
+                break;
+              }
+              dirOK = true;
+            }
+          }
+        }
+        if (ok && L <= d * 1.6 + 0.2) {
           best = k;
+          break;
         }
       }
       if (best < 0 || !this.goTo(best, "walk")) return false;
@@ -3887,7 +3927,18 @@ window.createCatKit = function(THREE) {
     // 各ネコは、乗っている／跳び移ろうとしている小さな板の面の番号を boardRes に持つ（update で毎コマ）。
     // 跳び移り先が別のネコの板なら跳ばずに待つ（相手が休んでいれば 0.4 秒、動いていれば 2.5 秒で諦めて別の道へ）。道選びでも避ける
     boardComp(k) {
-      return k >= 0 && this.smallBoard(k) ? this.world.nav.comp[k] : -1;
+      return k >= 0 && this.oneCatBoard(k) ? this.world.nav.comp[k] : -1;
+    }
+    // 1 匹だけの板：差し渡し 55cm 以下・点 100 個以下（実寸）。smallBoard（40cm・40 個。着地で板の真ん中に体を収める判定）より広め。
+    // 左壁の最上段のステップ（40cm を少し超える）に 2 匹が乗って重なった（2026-10-16 Naoya「このステップへの 2 匹乗りを禁止」）
+    oneCatBoard(k) {
+      const nav = this.world.nav;
+      if (!nav || !nav.comp || k === void 0 || k < 0) return false;
+      if (this.smallBoard(k)) return true;
+      const M = SMALL_BOARDS.get(nav.nodes), o = M && M.get(nav.comp[k]);
+      if (!o || (nav.beds || []).some((b) => b.comp === nav.comp[k])) return false;
+      const sc = this.scale || 1;
+      return o.n <= 100 && (o.x1 - o.x0) * sc <= 0.55 && (o.z1 - o.z0) * sc <= 0.55;
     }
     boardNow() {
       const W = this.world;
