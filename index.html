@@ -3052,10 +3052,16 @@ window.createCatKit = function(THREE) {
     }
     // しゃがみ・匍匐の間に向きを変える速さの倍率（2026-10-16 Naoya「しゃがみを伴う方向転換でバグが起きやすいので、避けられない
     // 場合は破綻しない作り込みを」）。低い板の下で体だけが速く回ると、足の踏み替えと壁からの押し戻しが追いつかず、胴がねじれた
+    // 狭い所（isNarrow）でも 0.65 倍。小屋の中・壁ぎわの細い道でその場で回ると、足の踏み替えが追いつかず前足が交差した（2026-10-16 Naoya
+    // 「壁に隣接した狭所でまだ足のもつれ」）。0.1 秒ごとに測った値を使う（毎コマ測ると重い）
     lowTurnK() {
       if (typeof window !== "undefined" && window.__noLowTurn) return 1;
       const d = Math.max(this._duckC || 0, this._duckP || 0, this.crawl || 0);
-      return 1 - 0.4 * clamp((d - 0.3) / 0.4, 0, 1);
+      if ((this._narrowT = (this._narrowT || 0) - 1) <= 0) {
+        this._narrowT = 6;
+        this._narrowNow = this.isNarrow();
+      }
+      return (1 - 0.4 * clamp((d - 0.3) / 0.4, 0, 1)) * (this._narrowNow && typeof window !== "undefined" && window.__narrowTurn ? 0.65 : 1);
     }
     // 狭い所か：胴の中ほどから左右 13cm の両方に、同じ高さの面と壁からの空きが無い（2026-10-16）
     isNarrow() {
@@ -3577,6 +3583,10 @@ window.createCatKit = function(THREE) {
       }
       this.timer -= dt;
       if (!this.settle && this.act === "stand" && this.timer > 60) this.timer = 1;
+      if (this.act === "loaf" && (this._loafChkT = (this._loafChkT || 0) - dt) <= 0) {
+        this._loafChkT = 0.5;
+        if (!this.canLoafHere() && !this.bedAt(this.chestG.clone().lerp(this.pelvisG, 0.5))) this.timer = Math.min(this.timer, 0);
+      }
       this.speed = 0;
       this.vel.multiplyScalar(0.8);
       if (this.teaseT > 0) {
@@ -4736,7 +4746,9 @@ window.createCatKit = function(THREE) {
           }
         }
         if (!(typeof window !== "undefined" && window.__noFootSide)) {
-          const mid = i < 2 ? this.chestG : this.pelvisG, Ls = leftOf(i < 2 ? this.fwd : this.pelvisFwd()), side = i % 2 === 0 ? 1 : -1;
+          const mid = i < 2 ? this.chestG : this.pelvisG, cm = this.chestG.clone().lerp(this.pelvisG, 0.5);
+          const segD = i < 2 ? new V3(this.chestG.x - cm.x, 0, this.chestG.z - cm.z) : new V3(cm.x - this.pelvisG.x, 0, cm.z - this.pelvisG.z);
+          const Ls = leftOf(segD.lengthSq() > 1e-6 ? segD.normalize() : i < 2 ? this.fwd : this.pelvisFwd()), side = i % 2 === 0 ? 1 : -1;
           const lat = ((f.pos.x - mid.x) * Ls.x + (f.pos.z - mid.z) * Ls.z) * side;
           if (lat < 5e-3) {
             const k2 = (5e-3 - lat) * side, nx = f.pos.x + Ls.x * k2, nz = f.pos.z + Ls.z * k2, y = f.swing ? f.pos.y : this.surfY(nx, nz, f.pos.y + 0.02);
@@ -5117,6 +5129,14 @@ window.createCatKit = function(THREE) {
       {
         const ax = new V3().subVectors(pelvis, chest), L2 = ax.length(), Lmax = D.spine * 1.15;
         if (L2 > Lmax) pelvis.copy(chest).addScaledVector(ax.divideScalar(L2), Lmax);
+        const Pq = this.post || {}, Lmin = D.spine * 0.8, L22 = chest.distanceTo(pelvis);
+        if (!(typeof window !== "undefined" && window.__noMinLen) && L22 < Lmin && L22 > 1e-4 && !this._tight && !(J && ["flight", "launch", "land", "lean", "out", "in"].includes(J.phase)) && Math.max(Pq.sit || 0, Pq.loaf || 0, Pq.curl || 0, Pq.stretch || 0) < 0.3) {
+          const d = new V3().subVectors(pelvis, chest).divideScalar(L22), Wb = this.world, hT = (D.hipH + D.chestH) * 0.35;
+          const clear = (a, b) => !(Wb.segHit && Wb.segHit(a.clone().addScaledVector(UP, hT), b.clone().addScaledVector(UP, hT)));
+          const np = chest.clone().addScaledVector(d, Lmin), nc = pelvis.clone().addScaledVector(d, -Lmin);
+          if (clear(chest, np)) pelvis.copy(np);
+          else if (clear(nc, pelvis)) chest.copy(nc);
+        }
       }
       this.lastChestJ = chest.clone();
       this.lastPelvisJ = pelvis.clone();
