@@ -122,6 +122,9 @@
   body.mobile .btip::before { content: ''; position: absolute; left: 50%; top: -5px; width: 8px; height: 8px; background: #fff;
     border-left: 1px solid var(--line); border-top: 1px solid var(--line); transform: translateX(-50%) rotate(45deg); }
   /* 最下部中央のクレジット（2026-10-15 Naoya） */
+  /* 版（2026-10-16 Naoya「見ているものが最新か確かめたい」）：DESIGNED BY の下に小さく、組み立てた日時（legacy_bundle が入れる） */
+  #ver { position: fixed; left: 50%; bottom: calc(5px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+    font-size: 7px; letter-spacing: .12em; color: var(--sub); opacity: .6; white-space: nowrap; pointer-events: none; z-index: 4; }
   #credit { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
     font-size: 9.5px; letter-spacing: .2em; color: var(--sub); opacity: .85; white-space: nowrap; pointer-events: none; z-index: 4; }
   body.mobile.editing .btip { display: none; }
@@ -418,6 +421,7 @@ document.body.classList.add('mobile');   /* 2026-10-13 Naoya：PC もスマホ�
 </div>
 <div id="catedit" class="card"><div id="cats1"></div></div>
 <div id="credit">DESIGNED BY NEKONOMACHIKADO</div>
+<div id="ver">2026.10.16 23:49</div>
 <div id="headline"></div>
 <div id="veil"><img id="veilImg" alt="" src="sites/case1_thumb.cb050618f6.jpg"><div id="veilLoad"><div>読み込み中</div><div class="bar none"><i></i></div></div></div>
 <button id="tourPrev" class="tourbtn" aria-label="前のモデル"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 L8 12 L15 19"/></svg></button>
@@ -2857,6 +2861,25 @@ window.createCatKit = function(THREE) {
       if (c.pivot || c.tight || c.tightLen && c.s < c.tightLen) vt = Math.min(vt, 0.32 * this.lowTurnK());
       const pass = this.passPlan(c);
       const narrow = this.isNarrow();
+      if (!(typeof window !== "undefined" && window.__noLookAhead) && this.world.occupied && !(this.retreatUntil > this.t) && (this._lookT = (this._lookT || 0) - dt) <= 0) {
+        this._lookT = 0.2;
+        const W = this.world, f0 = horiz(this.fwd).normalize();
+        let hitO = null, narrowAhead = narrow;
+        for (let d2 = 0.15; d2 <= 1 && !hitO; d2 += 0.15) {
+          const u = clamp((c.s + d2) / c.len, 0, 1), q = c.curve.getPointAt(u), tg = horiz(c.curve.getTangentAt(u)).normalize();
+          if (!narrowAhead && this.isNarrow(q, tg)) narrowAhead = true;
+          const o = W.occupied(q, 0.18, this);
+          if (o && !o.jump && o.state === "move" && o.speed > 0.05 && horiz(o.fwd).normalize().dot(f0) < -0.3) hitO = o;
+          if (u >= 1) break;
+        }
+        if (hitO && narrowAhead && !(hitO.retreatUntil > hitO.t)) {
+          const mine = this.retreatFrom(hitO);
+          if (mine) {
+            hitO.retreatFrom(this);
+            return;
+          }
+        }
+      }
       if (narrow && !pass && this.world.occupied && !(this.retreatUntil > this.t)) {
         const o = this.world.occupied(this.chestG.clone().addScaledVector(horiz(this.fwd).normalize(), 0.45), 0.25, this);
         const prep = o && o.jump && ["turn", "aim", "creep", "wiggle", "crouch"].includes(o.jump.phase);
@@ -3064,8 +3087,8 @@ window.createCatKit = function(THREE) {
       return (1 - 0.4 * clamp((d - 0.3) / 0.4, 0, 1)) * (this._narrowNow && typeof window !== "undefined" && window.__narrowTurn ? 0.65 : 1);
     }
     // 狭い所か：胴の中ほどから左右 13cm の両方に、同じ高さの面と壁からの空きが無い（2026-10-16）
-    isNarrow() {
-      const W = this.world, mid = this.chestG.clone().lerp(this.pelvisG, 0.5), y0 = mid.y, Lt = leftOf(horiz(this.fwd).normalize());
+    isNarrow(at, dir) {
+      const W = this.world, mid = at ? at.clone() : this.chestG.clone().lerp(this.pelvisG, 0.5), y0 = mid.y, Lt = leftOf(horiz(dir || this.fwd).normalize());
       const free = (lat) => {
         const q = mid.clone().addScaledVector(Lt, lat), y = this.surfY(q.x, q.z, y0 + 0.02);
         if (y === null || Math.abs(y - y0) > 0.03) return false;
