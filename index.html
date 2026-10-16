@@ -4221,7 +4221,7 @@ window.createCatKit = function(THREE) {
           this.speed = cv;
           this.vel.copy(J.dir).multiplyScalar(cv);
         } else if (J.slip || !this.feet.some((x) => x.swing) || J.t > (J.chain ? 0.35 : 2.5)) {
-          const climbJ = J.up && J.step && (J.hB < 0.5 || J.hole);
+          const climbJ = J.up && J.step && (J.hB < 0.5 - 1e-3 && J.dz >= 0.15 || J.hole);
           if (!J.flat && !climbJ && !J.slip && Math.abs(J.B.y - this.chestG.y) < 0.3) {
             const LT = this.planLean();
             const fm = this.feet[0].pos.clone().lerp(this.feet[1].pos, 0.5);
