@@ -585,6 +585,7 @@ window.createCatKit = function(THREE) {
     const upJump = C1.y > C0.y + 0.04;
     const drop = C1.y < C0.y - 0.12;
     let apex = drop ? C0.y + 8e-3 + 0.02 * hd : Math.max(C0.y, C1.y) + 0.035 + 0.05 * hd;
+    if (!drop && Math.abs(C1.y - C0.y) < 0.15) apex = Math.max(apex, Math.max(C0.y, C1.y) + 0.05 + 0.1 * hd);
     const make = (apexY) => {
       const t1 = Math.sqrt(2 * Math.max(5e-4, apexY - C0.y) / G);
       const t2 = Math.sqrt(2 * Math.max(5e-4, apexY - C1.y) / G);
@@ -4725,7 +4726,7 @@ window.createCatKit = function(THREE) {
           const stretchK = J.up ? 1 + 0.06 * (1 - smooth(0, 0.35, u)) - 0.08 * smooth(0.35, 0.8, u) * (1 - smooth(0.85, 1, u)) : 1 - 0.08 * Math.sin(Math.PI * u);
           chest = C.clone().addScaledVector(d, D.spine / 2 * stretchK);
           pelvis = C.clone().addScaledVector(d, -D.spine / 2 * stretchK);
-          arch = J.up ? -0.025 * (1 - smooth(0, 0.3, u)) + 0.04 * smooth(0.3, 0.75, u) * (1 - smooth(0.85, 1, u)) : 0.012 + 0.03 * Math.sin(Math.PI * u) - 0.02 * smooth(0.75, 1, u);
+          arch = J.up ? -0.025 * (1 - smooth(0, 0.3, u)) + 0.04 * smooth(0.3, 0.75, u) * (1 - smooth(0.85, 1, u)) + (Math.abs(J.dz || 0) < 0.15 ? 0.015 * Math.sin(Math.PI * u) : 0) : 0.012 + 0.03 * Math.sin(Math.PI * u) - 0.02 * smooth(0.75, 1, u);
           const dl = leftOf(dH);
           const edgeF = J.frontL.clone().addScaledVector(UP, 0.03);
           const tuckF = J.up ? chest.clone().addScaledVector(new V3().subVectors(edgeF, chest).normalize().addScaledVector(d, 0.3).normalize(), (D.humerus + D.radius + D.pastern) * 0.85) : chest.clone().addScaledVector(d, 0.17).addScaledVector(UP, -0.02);
@@ -4744,12 +4745,13 @@ window.createCatKit = function(THREE) {
             const a = start.lerp(tuck, smooth(0, 0.22, u));
             return a.lerp(over, reachF);
           });
-          const trailH = J.up ? pelvis.clone().addScaledVector(d, -0.13).addScaledVector(UP, -0.1) : pelvis.clone().addScaledVector(d, -0.06).addScaledVector(UP, -0.09);
+          const lvl = Math.abs(J.dz || 0) < 0.15;
+          const trailH = lvl ? pelvis.clone().addScaledVector(d, -0.08).addScaledVector(UP, -0.13) : J.up ? pelvis.clone().addScaledVector(d, -0.13).addScaledVector(UP, -0.1) : pelvis.clone().addScaledVector(d, -0.06).addScaledVector(UP, -0.09);
           const tuckH = J.up ? pelvis.clone().addScaledVector(UP, -0.13).addScaledVector(d, 0.03) : pelvis.clone().addScaledVector(d, 0.02).addScaledVector(UP, -0.12);
           hp = [0, 1].map((s) => {
             const side = dl.clone().multiplyScalar(s === 0 ? D.hipW : -D.hipW);
-            const a = J.hindStart[s].clone().lerp(trailH.clone().add(side), smooth(0, 0.35, u));
-            const b = a.lerp(tuckH.clone().add(side), smooth(0.35, 0.75, u));
+            const a = J.hindStart[s].clone().lerp(trailH.clone().add(side), smooth(0, lvl ? 0.25 : 0.35, u));
+            const b = a.lerp(tuckH.clone().add(side), lvl ? smooth(0.25, 0.6, u) : smooth(0.35, 0.75, u));
             return b.lerp(J.hindL.clone().add(side).addScaledVector(UP, J.up ? 0.07 : 0.04), smooth(0.8, 1, u) * (J.up ? 0.5 : 0.85));
           });
           for (const q of fp) this.outOfBowl(q);
