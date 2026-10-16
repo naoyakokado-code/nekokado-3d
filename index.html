@@ -421,7 +421,7 @@ document.body.classList.add('mobile');   /* 2026-10-13 Naoya：PC もスマホ�
 </div>
 <div id="catedit" class="card"><div id="cats1"></div></div>
 <div id="credit">DESIGNED BY NEKONOMACHIKADO</div>
-<div id="ver">Ver. 1017.04</div>
+<div id="ver">Ver. 1017.05</div>
 <div id="headline"></div>
 <div id="veil"><img id="veilImg" alt="" src="sites/case1_thumb.d9e6c24ef9.jpg"><div id="veilLoad"><div>読み込み中</div><div class="bar none"><i></i></div></div></div>
 <button id="tourPrev" class="tourbtn" aria-label="前のモデル"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 L8 12 L15 19"/></svg></button>
@@ -2084,10 +2084,20 @@ window.createCatKit = function(THREE) {
       this.zzz.visible = false;
       this.group.add(this.zzz);
       const nav = world.nav;
+      const linked = (k2) => {
+        let ok = 0;
+        for (let j = 0; j < 6 && ok < 2; j++) {
+          const t = nav.usable[Math.floor(Math.random() * nav.usable.length)];
+          if (t === k2) continue;
+          const p = world.findPath(k2, t);
+          if (p && p.length > 1) ok++;
+        }
+        return ok >= 2;
+      };
       let k = nav.usable[Math.floor(Math.random() * nav.usable.length)];
-      for (let i = 0; i < 30 && world.occupied; i++) {
+      for (let i = 0; i < 40; i++) {
         const q = nav.nodes[k];
-        if (!world.occupied(v(q.x, q.y, q.z), 0.45, this)) break;
+        if (!(world.occupied && world.occupied(v(q.x, q.y, q.z), 0.45, this)) && (!world.findPath || linked(k))) break;
         k = nav.usable[Math.floor(Math.random() * nav.usable.length)];
       }
       const n = nav.nodes[k];
@@ -2515,7 +2525,7 @@ window.createCatKit = function(THREE) {
         const t = list[Math.floor(Math.random() * list.length)];
         const n = nav.nodes[t];
         if (Math.hypot(n.x - this.chestG.x, n.z - this.chestG.z) < 0.4 && Math.abs(n.y - this.chestG.y) < 0.05) continue;
-        if (this.world.occupied && this.world.occupied(v(n.x, n.y, n.z), 0.35, this)) continue;
+        if (this.world.occupied && this.world.occupied(v(n.x, n.y, n.z), typeof window !== "undefined" && window.__oldTargetR ? 0.35 : 0.5, this)) continue;
         if (tries < 6 && this.startsBehind(k0, t)) continue;
         const r2 = Math.random();
         if (this.goTo(t, r2 < 0.12 ? "run" : r2 < 0.35 ? "trot" : "walk")) return true;
@@ -2556,6 +2566,27 @@ window.createCatKit = function(THREE) {
         if (restIn(path)) {
           const alt = w.findPathAvoid ? w.findPathAvoid(k0, target, this) : null;
           if (!alt || alt.length < 2 || restIn(alt)) return false;
+          path = alt;
+        }
+      }
+      if (w.occupied && !(typeof window !== "undefined" && window.__noStartAvoid)) {
+        const startHit = (pth) => {
+          const A = w.nav.nodes[pth[0]];
+          for (let i = 1; i < pth.length; i++) {
+            const n = w.nav.nodes[pth[i]];
+            if (Math.hypot(n.x - A.x, n.z - A.z) > 0.6 || Math.abs(n.y - A.y) > 0.1) break;
+            if (Math.hypot(n.x - this.chestG.x, n.z - this.chestG.z) < 0.08) continue;
+            const o = w.occupied(v(n.x, n.y, n.z), 0.1, this);
+            if (o && o.state === "move") {
+              const to = v(this.chestG.x * this.scale - o.chestG.x * o.scale, 0, this.chestG.z * this.scale - o.chestG.z * o.scale);
+              if (to.lengthSq() > 1e-6 && horiz(o.fwd).normalize().dot(to.normalize()) > 0.3) return true;
+            }
+          }
+          return false;
+        };
+        if (startHit(path)) {
+          const alt = w.findPathAvoid ? w.findPathAvoid(k0, target, this) : null;
+          if (!alt || alt.length < 2 || startHit(alt)) return false;
           path = alt;
         }
       }
