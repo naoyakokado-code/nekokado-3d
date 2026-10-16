@@ -1903,7 +1903,7 @@ window.createCatKit = function(THREE) {
           }
         }
       }
-      this.loafLift = { chest: -4e-3, pelvis: -0.04 };
+      this.loafLift = { chest: -4e-3, pelvis: -0.015 };
       this.armR = 0.016;
       this.sitAdj = { pu: 0.015, pf: 0.07, cu: -0.015, cf: 0 };
     }
@@ -2840,6 +2840,18 @@ window.createCatKit = function(THREE) {
         if (kappa > 0.1) vt = Math.min(vt, Math.max(0.18, Math.sqrt(2.5 / kappa)));
       }
       const pass = this.passPlan(c);
+      const narrow = this.isNarrow();
+      if (narrow && !pass && this.world.occupied && !(this.retreatUntil > this.t)) {
+        const o = this.world.occupied(this.chestG.clone().addScaledVector(horiz(this.fwd).normalize(), 0.45), 0.25, this);
+        const prep = o && o.jump && ["turn", "aim", "creep", "wiggle", "crouch"].includes(o.jump.phase);
+        const dot = o ? horiz(o.fwd).normalize().dot(horiz(this.fwd).normalize()) : 0;
+        const follow = o && !o.jump && o.state === "move" && o.speed > 0.1 && dot > 0.3;
+        if (o && (!o.jump || prep) && !follow) {
+          const mine = this.turnBack(o);
+          if (mine && !o.jump && o.state === "move" && dot < -0.3 && !(o.retreatUntil > o.t) && o.isNarrow()) o.turnBack(this);
+          if (mine) return;
+        }
+      }
       this.passing = pass ? pass.o : null;
       this.lane += ((pass ? pass.lat : 0) - this.lane) * damp(5, dt);
       let blocked = this.world.occupied && (this.world.occupied(this.chestG.clone().addScaledVector(this.fwd, 0.1), 0.15, this) || this.world.occupied(this.chestG.clone().addScaledVector(this.fwd, 0.22), 0.15, this));
@@ -2967,6 +2979,10 @@ window.createCatKit = function(THREE) {
       if (oMoving && !headOn && this.blockT < 2.5) return false;
       if (headOn && this.id < o.id && this.blockT < 2) return false;
       this.blockT = 0;
+      if (headOn && this.isNarrow() && this.turnBack(o)) {
+        if (o.state === "move" && !(o.retreatUntil > o.t)) o.turnBack(this);
+        return true;
+      }
       if ((this.yieldN = (this.yieldN || 0) + 1) > 3) {
         this.yieldN = 0;
         this.passT = 1.5;
@@ -3006,6 +3022,42 @@ window.createCatKit = function(THREE) {
         }
       }
       return false;
+    }
+    // 狭い所か：胴の中ほどから左右 13cm の両方に、同じ高さの面と壁からの空きが無い（2026-10-16）
+    isNarrow() {
+      const W = this.world, mid = this.chestG.clone().lerp(this.pelvisG, 0.5), y0 = mid.y, Lt = leftOf(horiz(this.fwd).normalize());
+      const free = (lat) => {
+        const q = mid.clone().addScaledVector(Lt, lat), y = this.surfY(q.x, q.z, y0 + 0.02);
+        if (y === null || Math.abs(y - y0) > 0.03) return false;
+        return !W.clearance || W.clearance(q.clone().addScaledVector(UP, (D.chestH + D.hipH) * 0.35), 0.08) >= 0.05;
+      };
+      return !(free(0.13) && free(-0.13));
+    }
+    // 振り返って引き返す：来た側（後ろ）の 0.6〜2.5m 先の、空いている道の点へ向かう。決めたら 5 秒は鉢合わせで迷い直さない
+    turnBack(o) {
+      const w = this.world, nav = w.nav, k0 = w.nearestNode(this.chestG, 0.3);
+      if (k0 < 0) return false;
+      const back = horiz(this.fwd).normalize().negate();
+      let best = -1, bs = -Infinity;
+      for (let k = 0; k < nav.nodes.length; k++) {
+        if (nav.comp && nav.comp[k] !== nav.comp[k0]) continue;
+        const n = nav.nodes[k], dx = n.x - this.chestG.x, dz = n.z - this.chestG.z, d = Math.hypot(dx, dz);
+        if (d < 0.6 || d > 2.5 || Math.abs(n.y - this.chestG.y) > 0.6) continue;
+        const dot = (dx * back.x + dz * back.z) / d;
+        if (dot < 0.5) continue;
+        if (w.occupied && w.occupied(v(n.x, n.y, n.z), 0.35, this)) continue;
+        const sc = dot + Math.min(d, 1.5) * 0.3 + Math.random() * 0.2;
+        if (sc > bs) {
+          bs = sc;
+          best = k;
+        }
+      }
+      if (best < 0 || !this.goTo(best, "walk")) return false;
+      this.retreatUntil = this.t + 5;
+      this.waitT = 0;
+      this.blockT = 0;
+      this.yieldN = 0;
+      return true;
     }
     // 道を塞いでいるのでどく（止まっているネコ）。who の進む向きと直角に 0.35m ほど
     stepAside(who) {
@@ -3089,6 +3141,31 @@ window.createCatKit = function(THREE) {
       }
       return best;
     }
+    // 小屋の中なら、入口・窓の向き（いちばん遠くまで見通せる、体の収まる向き）を返す。小屋でなければ null。
+    // 小屋：頭上 50cm 以内に屋根、胴の高さで 8 方向のうち 3 方向以上が 30cm 以内で壁・板にふさがる（2026-10-16 Naoya）
+    houseDir(mid) {
+      const W = this.world;
+      if (!W.ceilingAt || !W.segHit) return null;
+      if (W.ceilingAt(mid.clone().addScaledVector(UP, 0.03), 0.6) > 0.5) return null;
+      const q = mid.clone().addScaledVector(UP, Math.min(0.12, (this.ceil || 1) * 0.5));
+      let walls = 0;
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        if (W.segHit(q, q.clone().add(v(Math.cos(a) * 0.3, 0, Math.sin(a) * 0.3)))) walls++;
+      }
+      if (walls < 3) return null;
+      let best = null, bl = 0.45;
+      for (let i = 0; i < 16; i++) {
+        const a = i * Math.PI / 8, d = v(Math.cos(a), 0, Math.sin(a));
+        const h = W.segHit(q, q.clone().addScaledVector(d, 2));
+        const L = h ? h.distance : 2;
+        if (L > bl + 0.02 && this.bodyFits(d)) {
+          bl = L;
+          best = d;
+        }
+      }
+      return best;
+    }
     // 体（胴の中ほどから前後 15cm）が同じ面に乗る向きか
     bodyFits(d) {
       const W = this.world, mid = this.chestG.clone().lerp(this.pelvisG, 0.5), y0 = mid.y;
@@ -3131,6 +3208,22 @@ window.createCatKit = function(THREE) {
       if (bed && !(this._bedCool > this.t)) {
         this.settle = null;
         this.startCurl(bed);
+        return;
+      }
+      if (!this.settle) this._houseD = this.houseDir(mid);
+      if (this._houseD) {
+        const hd = this._houseD;
+        if (!this.settle && horiz(this.fwd).normalize().dot(hd) < 0.94) {
+          this.settle = this.makeTurn(hd);
+          this.setAct("stand", 99);
+          return;
+        }
+        this.settle = null;
+        this._houseD = null;
+        this.winDir = hd;
+        this.look = this.windowLook();
+        this.lookTimer = 3 + Math.random() * 3;
+        this.setAct("loaf", 14 + Math.random() * 16, Math.random() < 0.35);
         return;
       }
       if (!this.settle) {
@@ -4413,7 +4506,10 @@ window.createCatKit = function(THREE) {
       const pv = pA.clone().lerp(O.p1, smooth(out ? 0.15 : 0, out ? 1 : 0.85, up));
       pv.y = out ? pA.y + (O.p1.y - pA.y) * smooth(0, 0.7, up) : pA.y + (O.p1.y - pA.y) * smooth(0.3, 1, up);
       const dd = ch.distanceTo(pv);
-      if (dd > D.spine) ch.copy(pv).addScaledVector(ch.clone().sub(pv).normalize(), D.spine);
+      if (dd > D.spine) {
+        const dv = ch.clone().sub(pv).normalize();
+        ch.copy(pv).addScaledVector(dv, D.spine);
+      }
       this.chestG.copy(ch);
       this.pelvisG.copy(pv);
       this.trail = [{ p: pv.clone(), d: 0 }, { p: ch.clone(), d: D.spine }];
