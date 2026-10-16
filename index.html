@@ -63,7 +63,7 @@
   #status { position: fixed; left: 16px; bottom: 16px; padding: 8px 12px; font-size: 12px; }
   #status:empty { display: none; }
   /* プランの切り替え（2026-10-14）。上の中央に常に出す */
-  #plans { position: fixed; left: 50%; top: calc(14px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+  #plans { position: fixed; left: 50%; top: calc(18px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
     display: flex; gap: 4px; padding: 4px; border-radius: 999px; z-index: 6; }
   #plans button { white-space: nowrap; border: none; background: none; border-radius: 999px; padding: 8px 18px; font-size: 14px; font-weight: 600; color: var(--sub); }
   #plans button.on { background: var(--accent); color: var(--accent-ink); }
@@ -84,8 +84,8 @@
      ネコをタップすると上にそのネコの設定が出る。設定中は追加ボタンを隠し、カードの中の「OK」で閉じる（2026-10-14） */
   #fab, #catedit, #insta { display: none; }
   body.mobile #title, body.mobile #toggle, body.mobile #panel, body.mobile #hint { display: none !important; }
-  body.mobile #fab { display: flex; position: fixed; right: calc(18px + env(safe-area-inset-right, 0px));   /* 右上（2026-10-15 Naoya。以前は右下） */
-    top: calc(14px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; border-radius: 50%;   /* 視点ボタンと同じ大きさ（2026-10-14 Naoya） */
+  body.mobile #fab { display: flex; position: fixed; right: calc(18px + env(safe-area-inset-right, 0px));   /* 右上（2026-10-15 Naoya。以前は右下）。上端からも 18px で、下の前・次と上下対称（2026-10-16 Naoya） */
+    top: calc(18px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; border-radius: 50%;   /* 視点ボタンと同じ大きさ（2026-10-14 Naoya） */
     flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0;
     background: var(--panel); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(60,40,20,.18);
     color: var(--ink); font-size: 11px; font-weight: 600; letter-spacing: .02em; -webkit-tap-highlight-color: transparent; }
@@ -97,7 +97,7 @@
   body.mobile #fab:disabled { opacity: .4; }
   /* Instagram（2026-10-15 Naoya）：左上に、ネコの追加ボタンと同じ大きさ・同じ見た目の丸で白黒のマーク。別のタブで開く */
   body.mobile #insta { display: flex; position: fixed; left: calc(18px + env(safe-area-inset-left, 0px));
-    top: calc(14px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; border-radius: 50%;
+    top: calc(18px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; border-radius: 50%;
     align-items: center; justify-content: center; box-sizing: border-box;
     background: var(--panel); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(60,40,20,.18);
     color: var(--ink); -webkit-tap-highlight-color: transparent; }
@@ -105,7 +105,7 @@
   /* ボタンの説明（2026-10-15 Naoya）：最初の操作案内が出ている間だけ、各ボタンの真下に出し、案内と一緒に消す。
      札の高さは 24px にそろえる（文字の高さで決めると、英字の「Instagram」と日本語の「ネコを追加」で高さが違った） */
   .btip { display: none; }
-  body.mobile .btip { display: block; position: fixed; top: calc(14px + 46px + 8px + env(safe-area-inset-top, 0px));
+  body.mobile .btip { display: block; position: fixed; top: calc(18px + 46px + 8px + env(safe-area-inset-top, 0px));
     box-sizing: border-box; height: 24px; line-height: 22px; padding: 0 10px; border-radius: 999px; white-space: nowrap; pointer-events: none;
     font-size: 11.5px; font-weight: 700; letter-spacing: .02em; color: var(--ink); z-index: 5; transition: opacity .7s ease; }
   body.mobile #tipFab { right: calc(18px + 23px + env(safe-area-inset-right, 0px)); transform: translateX(50%); }
@@ -124,12 +124,12 @@
   body.mobile.editing .btip { display: none; }
   /* 見出し（2026-10-15 Naoya）：上の段の中央（左右の丸ボタンの間）に作品名。邸名は出さない。あるときはプランの切り替えをその下へ */
   #headline { display: none; }
-  body.hasHead #headline { display: flex; position: fixed; left: 50%; transform: translateX(-50%); top: calc(14px + env(safe-area-inset-top, 0px));
+  body.hasHead #headline { display: flex; position: fixed; left: 50%; transform: translateX(-50%); top: calc(18px + env(safe-area-inset-top, 0px));
     height: 46px; align-items: center; justify-content: center; max-width: calc(100vw - 2 * (18px + 46px + 10px + 46px + 10px)); overflow: hidden;
     font-size: clamp(14px, 4.2vw, 19px); font-weight: 700; letter-spacing: .08em; color: var(--ink); white-space: nowrap;
     text-shadow: 0 0 10px rgba(255,255,255,.95), 0 0 3px rgba(255,255,255,.9); pointer-events: none; z-index: 4; }
-  body.hasHead #plans { top: calc(14px + 46px + 10px + env(safe-area-inset-top, 0px)); }
-  body.mobile.hasHead #tipPlans { top: calc(14px + 46px + 10px + 42px + 8px + env(safe-area-inset-top, 0px)); }
+  body.hasHead #plans { top: calc(18px + 46px + 10px + env(safe-area-inset-top, 0px)); }
+  body.mobile.hasHead #tipPlans { top: calc(18px + 46px + 10px + 42px + 8px + env(safe-area-inset-top, 0px)); }
   body.mobile.editing #headline { display: none; }
   /* 巡回の前・次（2026-10-16 Naoya「下部左右に次のモデルに切り替えるボタン」）。巡回のときだけ出す */
   .tourbtn { display: none; }
@@ -167,12 +167,12 @@
   /* 提案資料のページは問い合わせ先（Instagram）を出さない（2026-10-16 Naoya。CFG.noInsta） */
   body.noInsta #insta, body.noInsta #tipInsta { display: none !important; }
   /* プラン切り替えは上の段に納める：右上の丸ボタン（58px）と縦の中心をそろえる（2026-10-16 Naoya） */
-  body.mobile #plans { top: calc(14px + 2px + env(safe-area-inset-top, 0px)); max-width: calc(100vw - 2 * (18px + 46px + 8px)); }
+  body.mobile #plans { top: calc(18px + 2px + env(safe-area-inset-top, 0px)); max-width: calc(100vw - 2 * (18px + 46px + 8px)); }
   /* 全画面（2026-10-16 Naoya）：上の段の左、Instagram の右隣（Instagram が無いページはその位置）。
      全画面にできない環境（iPhone の Safari、全画面を許していない枠の中）では出さない */
   #fs { display: none; }
   body.mobile.fsOk #fs { display: flex; position: fixed; left: calc(18px + 46px + 10px + env(safe-area-inset-left, 0px));
-    top: calc(14px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; border-radius: 50%; padding: 0; z-index: 6;
+    top: calc(18px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; border-radius: 50%; padding: 0; z-index: 6;
     align-items: center; justify-content: center; box-sizing: border-box; cursor: pointer;
     background: var(--panel); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(60,40,20,.18);
     color: var(--ink); -webkit-tap-highlight-color: transparent; }
@@ -183,8 +183,8 @@
   /* 全画面の説明の札。左隣の Instagram の札と重なるので一段下げる（Instagram が無いページは同じ段） */
   #tipFs { display: none !important; }
   body.mobile.fsOk #tipFs { display: block !important; left: calc(18px + 46px + 10px + 23px + env(safe-area-inset-left, 0px)); transform: translateX(-50%);
-    top: calc(14px + 46px + 8px + 24px + 8px + env(safe-area-inset-top, 0px)); }
-  body.mobile.fsOk.noInsta #tipFs { left: calc(18px + 23px + env(safe-area-inset-left, 0px)); top: calc(14px + 46px + 8px + env(safe-area-inset-top, 0px)); }
+    top: calc(18px + 46px + 8px + 24px + 8px + env(safe-area-inset-top, 0px)); }
+  body.mobile.fsOk.noInsta #tipFs { left: calc(18px + 23px + env(safe-area-inset-left, 0px)); top: calc(18px + 46px + 8px + env(safe-area-inset-top, 0px)); }
   body.mobile.editing #tipFs { display: none !important; }
   /* 全画面にしたら上の段のボタンを上へ逃がす（2026-10-16 Naoya）。上端中央のつまみで呼び戻し、しばらく触らなければまた逃げる。
      transform は中央寄せなどで使っているので、重ねて効く translate で動かす */
@@ -248,15 +248,15 @@
   /* 公開版（smol.jp・2026-10-16 Naoya）：Instagram の隣に問い合わせ（メール）。作品名は下に小さく、さりげなく */
   #mail { display: none; }
   body.mobile #mail { display: flex; position: fixed; left: calc(18px + 46px + 10px + env(safe-area-inset-left, 0px));
-    top: calc(14px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; border-radius: 50%;
+    top: calc(18px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; border-radius: 50%;
     align-items: center; justify-content: center; box-sizing: border-box; z-index: 6;
     background: var(--panel); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(60,40,20,.18);
     color: var(--ink); -webkit-tap-highlight-color: transparent; }
   body.mobile #mail svg { width: 23px; height: 23px; }   /* ボタンは雛形と同じく 80%（46px。2026-10-16 Naoya） */
   body.mobile.fsOk #fs { left: calc(18px + 2 * (46px + 10px) + env(safe-area-inset-left, 0px)); }   /* 全画面はメールの右隣 */
   body.mobile #tipMail { left: calc(18px + 46px + 10px + 23px + env(safe-area-inset-left, 0px)); transform: translateX(-50%);
-    top: calc(14px + 46px + 8px + 24px + 8px + env(safe-area-inset-top, 0px)); }   /* 両隣の札と重なるので一段下げる */
-  body.mobile.fsOk #tipFs { left: calc(18px + 2 * (46px + 10px) + 23px + env(safe-area-inset-left, 0px)); top: calc(14px + 46px + 8px + env(safe-area-inset-top, 0px)); }
+    top: calc(18px + 46px + 8px + 24px + 8px + env(safe-area-inset-top, 0px)); }   /* 両隣の札と重なるので一段下げる */
+  body.mobile.fsOk #tipFs { left: calc(18px + 2 * (46px + 10px) + 23px + env(safe-area-inset-left, 0px)); top: calc(18px + 46px + 8px + env(safe-area-inset-top, 0px)); }
   body.mobile.editing #mail { display: none; }
   /* 作品名は DESIGNED BY と同じ調子（2026-10-16 Naoya「強調はいらない」）：同じ大きさ・字間・色・薄さ、ふち無し */
   #planName { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
@@ -264,8 +264,8 @@
   #planName:empty, body.mobile.editing #planName { display: none; }
   /* 狭い画面では、プランの切り替えがメールのボタンと説明の札にかかるので、札の段の下へ */
   @media (max-width: 560px) {
-    #plans { top: calc(14px + 46px + 8px + 24px + 8px + env(safe-area-inset-top, 0px)); }
-    body.mobile #tipPlans { top: calc(14px + 46px + 8px + 24px + 8px + 44px + 8px + env(safe-area-inset-top, 0px)); }
+    #plans { top: calc(18px + 46px + 8px + 24px + 8px + env(safe-area-inset-top, 0px)); }
+    body.mobile #tipPlans { top: calc(18px + 46px + 8px + 24px + 8px + 44px + 8px + env(safe-area-inset-top, 0px)); }
   }
 </style>
 <script>
