@@ -427,7 +427,7 @@ document.body.classList.add('mobile');   /* 2026-10-13 Naoya：PC もスマホ�
 </div>
 <div id="catedit" class="card"><div id="cats1"></div></div>
 <div id="credit">DESIGNED BY NEKONOMACHIKADO</div>
-<div id="ver">Ver. 1017.11</div>
+<div id="ver">Ver. 1017.12</div>
 <div id="headline"></div>
 <div id="veil"><img id="veilImg" alt="" src="sites/case1_thumb.d9e6c24ef9.jpg"><div id="veilLoad"><div>読み込み中</div><div class="bar none"><i></i></div></div></div>
 <button id="tourPrev" class="tourbtn" aria-label="前のモデル"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 L8 12 L15 19"/></svg></button>
@@ -3410,9 +3410,15 @@ window.createCatKit = function(THREE) {
       const q = this.chestG.clone().lerp(this.pelvisG, 0.3).addScaledVector(UP, Math.min(0.15, (this.ceil || 1) * 0.5));
       const blocked = (d, L) => !!W.segHit(q, q.clone().addScaledVector(d, L));
       const f = horiz(this.fwd).normalize();
-      if (!blocked(f, 0.4)) return null;
       if (!nav._center) this.roomLook();
       const toC = nav._center ? v(nav._center.x - q.x, 0, nav._center.z - q.z) : f.clone().negate();
+      const old = typeof window !== "undefined" && window.__oldFaceRoom;
+      const Lf = v(-f.z, 0, f.x), tcn = toC.lengthSq() > 1e-6 ? toC.clone().normalize() : f.clone().negate();
+      const facingWall = blocked(f, old ? 0.4 : 0.7);
+      const besideWall = !old && (blocked(Lf, 0.3) || blocked(Lf.clone().negate(), 0.3)) && f.dot(tcn) < 0;
+      if (!facingWall && !besideWall) return null;
+      this._faceSoft = !old && !blocked(f, 0.4);
+      if (this._faceSoft && !this.roomToTurn(this.chestG.clone().lerp(this.pelvisG, 0.5))) return null;
       const mid = this.chestG.clone().lerp(this.pelvisG, 0.5), y0 = mid.y;
       const onS = (p) => {
         const y = W.surfaceY ? this.surfY(p.x, p.z, y0) : null;
@@ -3429,6 +3435,8 @@ window.createCatKit = function(THREE) {
           best = d;
         }
       }
+      if (!old && best && !facingWall && bs <= f.dot(tcn) + 0.2) return null;
+      this._faceD = best;
       return best;
     }
     // 小屋の中なら、入口・窓の向き（いちばん遠くまで見通せる、体の収まる向き）を返す。小屋でなければ null。
@@ -3526,7 +3534,8 @@ window.createCatKit = function(THREE) {
         if (!d && !this.bodyFits(horiz(this.fwd).normalize())) d = this.fitDir();
         if (d) {
           const tc = this.makeTurn(d);
-          if (tc) {
+          const soft = this._faceSoft && d === this._faceD;
+          if (tc && !(soft && tc.pivot && tc.sc !== void 0 && tc.sc < 0.7)) {
             this.settle = tc;
             this.setAct("stand", 99);
             return;
@@ -3872,7 +3881,10 @@ window.createCatKit = function(THREE) {
         if (this.act === "stretch") return this.setAct("stand", 0.6);
         if (this.act === "curl") return this.wake();
         if (this.act === "groom") return this.setAct("sit", 1.5 + Math.random() * 3);
-        if (!this.wander()) this.setAct("sit", 2);
+        if (!this.wander()) {
+          if (typeof window !== "undefined" && window.__oldFaceRoom || !this.roomToTurn(this.chestG.clone().lerp(this.pelvisG, 0.5))) this.setAct("sit", 2);
+          else this.arrive();
+        }
       }
     }
     // ---------------- 跳び移り
@@ -4332,7 +4344,7 @@ window.createCatKit = function(THREE) {
       const len = Math.max(0.01, curve.getLength());
       let from = 0;
       if (arc.pivotFrom) from = this.chestG.distanceTo(arc.pivotFrom);
-      return { curve, len, s: 0, pivot: arc.pivot || null, pivotFrom: from, slideOff: this.pelvisG.clone().sub(this.chestG).setY(0), tight: !!arc.tight };
+      return { curve, len, s: 0, pivot: arc.pivot || null, pivotFrom: from, slideOff: this.pelvisG.clone().sub(this.chestG).setY(0), tight: !!arc.tight, sc: arc.sc };
     }
     // その場で向きを変える点列（狭くて U 字が描けないとき）。体はまっすぐのまま中心まわりに回る（rigidTurn）。
     // 回る中心は今の体の中心から 8cm 以内で選び直す：回るあいだ胸と腰が段の上に載っている割合が一番高く、
@@ -5539,7 +5551,8 @@ window.createCatKit = function(THREE) {
         headWant.addScaledVector(UP, -0.03 * P.groom + lick).addScaledVector(f, -0.015 * P.groom).addScaledVector(L, -0.012 * P.groom);
         groomPaw = headWant.clone().addScaledVector(f, 0.055).addScaledVector(UP, -0.045).addScaledVector(L, -0.014);
       }
-      if (!rest && !bodyAxis && this.world.ceilingAt && !(typeof window !== "undefined" && window.__noHeadCeil)) {
+      const inBowl = J && (J.phase === "in" || J.phase === "out" || J.bw) || this.act === "curl" || (P.curl || 0) > 0.01;
+      if (!rest && !bodyAxis && !inBowl && this.world.ceilingAt && !(typeof window !== "undefined" && window.__noHeadCeil)) {
         if (!this._hc || (this._hcT = (this._hcT || 0) - dt) <= 0 || this._hc.p.distanceToSquared(headWant) > 9e-4) {
           this._hcT = 0.05;
           const q = v(headWant.x, Math.min(neckBase.y, headWant.y) - 0.02, headWant.z);
