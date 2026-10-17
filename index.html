@@ -427,7 +427,7 @@ document.body.classList.add('mobile');   /* 2026-10-13 Naoya：PC もスマホ�
 </div>
 <div id="catedit" class="card"><div id="cats1"></div></div>
 <div id="credit">DESIGNED BY NEKONOMACHIKADO</div>
-<div id="ver">Ver. 1017.12</div>
+<div id="ver">Ver. 1017.13</div>
 <div id="headline"></div>
 <div id="veil"><img id="veilImg" alt="" src="sites/case1_thumb.d9e6c24ef9.jpg"><div id="veilLoad"><div>読み込み中</div><div class="bar none"><i></i></div></div></div>
 <button id="tourPrev" class="tourbtn" aria-label="前のモデル"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 L8 12 L15 19"/></svg></button>
@@ -2793,6 +2793,36 @@ window.createCatKit = function(THREE) {
         return;
       }
       this.t += dt;
+      const fin = (q) => Number.isFinite(q.x) && Number.isFinite(q.y) && Number.isFinite(q.z);
+      if (fin(this.chestG) && fin(this.pelvisG) && fin(this.fwd)) {
+        const g = this._good || (this._good = { c: v(), p: v(), f: v() });
+        g.c.copy(this.chestG);
+        g.p.copy(this.pelvisG);
+        g.f.copy(this.fwd);
+        g.ok = true;
+      } else if (this._good && this._good.ok) {
+        if (typeof window !== "undefined") window.__nanFix = (window.__nanFix || 0) + 1;
+        const g = this._good;
+        this.jump = null;
+        this.cur = null;
+        this.plan = [];
+        this.state = "idle";
+        this.speed = 0;
+        this.vel.set(0, 0, 0);
+        this.chestG.copy(g.c);
+        this.pelvisG.copy(g.p);
+        this.fwd.copy(g.f);
+        this.trail = [{ p: this.pelvisG.clone(), d: 0 }, { p: this.chestG.clone(), d: this.pelvisG.distanceTo(this.chestG) }];
+        for (const f of this.feet) {
+          if (!fin(f.pos)) f.pos.copy(this.chestG);
+          f.swing = false;
+        }
+        if (this.headPos && !fin(this.headPos)) this.headPos = null;
+        if (Array.isArray(this.tail)) {
+          for (const q of this.tail) if (!fin(q)) q.copy(this.pelvisG);
+        }
+        this.setAct("stand", 1);
+      }
       this._tight = false;
       this._bowlOK = this.bowlOK();
       this.boardRes = this.boardNow();
@@ -3997,8 +4027,10 @@ window.createCatKit = function(THREE) {
             const h = Bv.clone().addScaledVector(d2, o);
             if (!fits(h, d2)) continue;
             const f = h.clone().addScaledVector(d2, D.spine);
-            hindL = h.setY(this.surfY(h.x, h.z, B.y));
-            frontL = f.setY(this.surfY(f.x, f.z, B.y));
+            const yh = this.surfY(h.x, h.z, B.y), yf = this.surfY(f.x, f.z, B.y);
+            if ((yh === null || yf === null) && typeof window !== "undefined") window.__holeFront = (window.__holeFront || 0) + 1;
+            hindL = h.setY(yh != null ? yh : B.y);
+            frontL = f.setY(yf != null ? yf : B.y);
             if (a !== 0) landDir = d2;
             break search;
           }
@@ -4030,6 +4062,8 @@ window.createCatKit = function(THREE) {
         return;
       }
       if (!frontL) frontL = hindL.clone().addScaledVector(dir, D.spine * 0.7);
+      if (!Number.isFinite(hindL.y)) hindL.y = B.y;
+      if (!Number.isFinite(frontL.y)) frontL.y = B.y;
       const upJ = B.y > A.y - 0.1;
       const rise = B.y - A.y, LOW = 0.45 + 0.01;
       this.jump = {
