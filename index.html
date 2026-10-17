@@ -427,7 +427,7 @@ document.body.classList.add('mobile');   /* 2026-10-13 Naoya：PC もスマホ�
 </div>
 <div id="catedit" class="card"><div id="cats1"></div></div>
 <div id="credit">DESIGNED BY NEKONOMACHIKADO</div>
-<div id="ver">Ver. 1017.07</div>
+<div id="ver">Ver. 1017.08</div>
 <div id="headline"></div>
 <div id="veil"><img id="veilImg" alt="" src="sites/case1_thumb.d9e6c24ef9.jpg"><div id="veilLoad"><div>読み込み中</div><div class="bar none"><i></i></div></div></div>
 <button id="tourPrev" class="tourbtn" aria-label="前のモデル"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 L8 12 L15 19"/></svg></button>
@@ -2596,6 +2596,28 @@ window.createCatKit = function(THREE) {
           path = alt;
         }
       }
+      if (!(typeof window !== "undefined" && window.__oldSideJump)) {
+        const me = this.chestG.clone().multiplyScalar(this.scale);
+        const crowd = w.cats && w.cats().some((o) => o !== this && o.chestG.clone().multiplyScalar(o.scale).distanceTo(me) < 0.6);
+        const justGaveUp = this._noSideHopUntil > this.t;
+        if (crowd || justGaveUp) {
+          const nav = w.nav, f = horiz(this.fwd).normalize();
+          let L = 0, bad = false;
+          for (let i = 1; i < path.length && L < 0.6; i++) {
+            const a = nav.nodes[path[i - 1]], b = nav.nodes[path[i]], e = nav.adj[path[i - 1]].find((x) => x.to === path[i]);
+            const jx = b.x - a.x, jz = b.z - a.z, jl = Math.hypot(jx, jz);
+            if (e && e.jump && jl > 0.02) {
+              const dd = (jx * f.x + jz * f.z) / jl;
+              if (justGaveUp ? dd > -0.5 : Math.abs(dd) < 0.5) {
+                bad = true;
+                break;
+              }
+            }
+            L += jl;
+          }
+          if (bad) return false;
+        }
+      }
       this.settle = null;
       this.winDir = null;
       this.plan = this.toPlan(path);
@@ -2864,6 +2886,24 @@ window.createCatKit = function(THREE) {
         } else {
           const nb = this.world.nav.nodes[this.cur.b];
           let occ = this.world.occupied && this.world.occupied(v(nb.x, nb.y, nb.z), 0.25, this) || this.boardTakenBy(this.boardComp(this.cur.b));
+          if (!occ && this.world.cats && !(typeof window !== "undefined" && window.__oldSideJump)) {
+            const A0 = this.world.nav.nodes[this.cur.a], jx = nb.x - A0.x, jz = nb.z - A0.z, jl = Math.hypot(jx, jz), f = horiz(this.fwd).normalize();
+            if (jl > 0.02 && Math.abs((jx * f.x + jz * f.z) / jl) < 0.5) {
+              const me = this.chestG.clone().multiplyScalar(this.scale);
+              for (const o of this.world.cats()) {
+                if (o === this || o.jump && ["launch", "flight"].includes(o.jump.phase)) continue;
+                const to = o.chestG.clone().multiplyScalar(o.scale).sub(me);
+                to.y = 0;
+                const d2 = to.length();
+                if (d2 > 0.5 || d2 < 1e-3) continue;
+                to.divideScalar(d2);
+                if (f.dot(to) > 0.5 || -horiz(o.fwd).normalize().dot(to) > 0.5) {
+                  occ = o;
+                  break;
+                }
+              }
+            }
+          }
           if (!occ && !(typeof window !== "undefined" && window.__noWalkYield)) {
             const wcB = this.walkComp(this.cur.b);
             if (wcB >= 0) for (const o of this.walkOthers(wcB)) {
@@ -3171,7 +3211,21 @@ window.createCatKit = function(THREE) {
       if (k0 < 0) return false;
       if (w.findPathAvoid && this.goal >= 0) {
         const path = w.findPathAvoid(k0, this.goal, this);
-        if (path && path.length > 1) {
+        let sideHop = false;
+        if (path && path.length > 1 && !(typeof window !== "undefined" && window.__oldSideJump)) {
+          const nav = w.nav, back2 = horiz(this.fwd).normalize().negate();
+          let L2 = 0;
+          for (let i = 1; i < path.length && L2 < 0.6; i++) {
+            const a = nav.nodes[path[i - 1]], b = nav.nodes[path[i]], e = nav.adj[path[i - 1]].find((x) => x.to === path[i]);
+            const jx = b.x - a.x, jz = b.z - a.z, jl = Math.hypot(jx, jz);
+            if (e && e.jump && jl > 0.02 && (jx * back2.x + jz * back2.z) / jl < 0.5) {
+              sideHop = true;
+              break;
+            }
+            L2 += jl;
+          }
+        }
+        if (path && path.length > 1 && !sideHop) {
           this.plan = this.toPlan(path);
           this.cur = null;
           this.speed = 0;
@@ -3242,7 +3296,7 @@ window.createCatKit = function(THREE) {
         const n = nav.nodes[k], dx = n.x - this.chestG.x, dz = n.z - this.chestG.z, d = Math.hypot(dx, dz);
         if (d < 0.6 || d > 2.5 || Math.abs(n.y - this.chestG.y) > 0.6) continue;
         const dot = (dx * back.x + dz * back.z) / d;
-        if (dot < (opt.off !== void 0 ? 0.2 : 0.5)) continue;
+        if (dot < 0.5) continue;
         if (w.occupied && w.occupied(v(n.x, n.y, n.z), 0.35, this)) continue;
         if (opt.off !== void 0 && nav.comp[k] === opt.off) continue;
         cands.push([dot + Math.min(d, 1.5) * 0.3 + Math.random() * 0.2 + (nav.comp && nav.comp[k] === nav.comp[k0] ? 1 : 0), k, d]);
@@ -3259,6 +3313,13 @@ window.createCatKit = function(THREE) {
           if (e && e.jump && i <= 3 && nav.comp[k] === nav.comp[k0]) {
             ok = false;
             break;
+          }
+          if (e && e.jump && L < 0.6 && !(typeof window !== "undefined" && window.__oldSideJump)) {
+            const jx = b.x - a.x, jz = b.z - a.z, jl = Math.hypot(jx, jz);
+            if (jl > 0.02 && (jx * back.x + jz * back.z) / jl < 0.5) {
+              ok = false;
+              break;
+            }
           }
           L += Math.hypot(b.x - a.x, b.z - a.z);
           if (!dirOK) {
@@ -3320,6 +3381,7 @@ window.createCatKit = function(THREE) {
     }
     // 行き先をあきらめて引き返す：今いる所から別の行き先を選ぶ（無ければその場で立つ）
     turnBack() {
+      this._noSideHopUntil = this.t + 1.5;
       this.plan = [];
       this.cur = null;
       this.speed = 0;
@@ -4925,6 +4987,10 @@ window.createCatKit = function(THREE) {
     // ---------------- 足
     stepFeet(dt) {
       const J = this.jump;
+      if (!J && this.state === "idle" && this.speed < 0.02 && this.act !== "curl" && Math.max(this.post.sit, this.post.loaf, this.post.stretch, this.post.groom || 0, this.post.curl || 0) < 0.03 && !(typeof window !== "undefined" && window.__noFwdAlign)) {
+        const ax = flatDir(this.pelvisG, this.chestG);
+        if (ax && ax.dot(horiz(this.fwd).normalize()) < 0) this.fwd.copy(ax);
+      }
       if (J && (J.phase === "flight" || J.phase === "land" || J.phase === "launch" || J.phase === "lean" || (J.phase === "out" || J.phase === "in") && J.bw)) return;
       const postW = Math.max(this.post.sit, this.post.loaf, this.post.stretch);
       if (postW > 0.03) {
@@ -4979,8 +5045,13 @@ window.createCatKit = function(THREE) {
           const settle = !moving && !this.feet.some((x) => x.swing) && f.pos.distanceTo(this.placedNeutral(i)) > 0.035;
           const turnLag = turning && !this.feet.some((x) => x.swing) && f.pos.distanceTo(this.placedNeutral(i)) > 0.035;
           const mid = i < 2 ? this.chestG : this.pelvisG, Ls = leftOf(i < 2 ? this.fwd : this.pelvisFwd());
-          const crossed = !pair.swing && ((f.pos.x - mid.x) * Ls.x + (f.pos.z - mid.z) * Ls.z) * (i % 2 === 0 ? 1 : -1) < -4e-3;
+          let crossed = !pair.swing && ((f.pos.x - mid.x) * Ls.x + (f.pos.z - mid.z) * Ls.z) * (i % 2 === 0 ? 1 : -1) < -4e-3;
+          if (crossed && !(typeof window !== "undefined" && window.__oldCrossLoop)) {
+            const pn = this.placedNeutral(i);
+            if (((pn.x - mid.x) * Ls.x + (pn.z - mid.z) * Ls.z) * (i % 2 === 0 ? 1 : -1) < -4e-3 && f.pos.distanceTo(pn) < 0.02) crossed = false;
+          }
           if (startByGait || overstretched || settle || turnLag || crossed) {
+            if (typeof window !== "undefined" && window.__stepDbg) window.__stepDbg(this, i, { gait: startByGait, over: overstretched, settle, turnLag, crossed, dN: +f.pos.distanceTo(this.placedNeutral(i)).toFixed(3) });
             f.swing = true;
             f.st = 0;
             f.lift = f.pos.clone();
