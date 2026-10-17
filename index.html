@@ -427,7 +427,7 @@ document.body.classList.add('mobile');   /* 2026-10-13 Naoya：PC もスマホ�
 </div>
 <div id="catedit" class="card"><div id="cats1"></div></div>
 <div id="credit">DESIGNED BY NEKONOMACHIKADO</div>
-<div id="ver">Ver. 1017.06</div>
+<div id="ver">Ver. 1017.07</div>
 <div id="headline"></div>
 <div id="veil"><img id="veilImg" alt="" src="sites/case1_thumb.d9e6c24ef9.jpg"><div id="veilLoad"><div>読み込み中</div><div class="bar none"><i></i></div></div></div>
 <button id="tourPrev" class="tourbtn" aria-label="前のモデル"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 L8 12 L15 19"/></svg></button>
@@ -2863,7 +2863,19 @@ window.createCatKit = function(THREE) {
           this.cur.stopAtEnd = !this.plan.length || this.plan[0].type === "jump";
         } else {
           const nb = this.world.nav.nodes[this.cur.b];
-          const occ = this.world.occupied && this.world.occupied(v(nb.x, nb.y, nb.z), 0.25, this) || this.boardTakenBy(this.boardComp(this.cur.b));
+          let occ = this.world.occupied && this.world.occupied(v(nb.x, nb.y, nb.z), 0.25, this) || this.boardTakenBy(this.boardComp(this.cur.b));
+          if (!occ && !(typeof window !== "undefined" && window.__noWalkYield)) {
+            const wcB = this.walkComp(this.cur.b);
+            if (wcB >= 0) for (const o of this.walkOthers(wcB)) {
+              const B = v(nb.x, nb.y, nb.z).multiplyScalar(this.scale), toB = B.clone().sub(o.chestG.clone().multiplyScalar(o.scale));
+              toB.y = 0;
+              const d2 = toB.length();
+              if (d2 < 0.75 || d2 < 1.1 && (o.jump || o.state === "move" && o.speed > 0.05) && horiz(o.fwd).normalize().dot(toB.normalize()) > 0.3) {
+                occ = o;
+                break;
+              }
+            }
+          }
           if (occ) {
             this.plan.unshift(this.cur);
             this.cur = null;
@@ -2904,6 +2916,44 @@ window.createCatKit = function(THREE) {
       const pass = this.passPlan(c);
       const narrow = this.isNarrow();
       if (this._slowUntil > this.t) vt = Math.min(vt, 0.06);
+      if (this._holdUntil > this.t) vt = 0;
+      if (!(typeof window !== "undefined" && window.__noWalkYield) && (this._walkT = (this._walkT || 0) - dt) <= 0) {
+        this._walkT = 0.15;
+        const k0 = this.world.nearestNode(this.chestG, 0.3), wc = k0 >= 0 ? this.walkComp(k0) : -1;
+        if (wc !== this._walkC) {
+          this._walkC = wc;
+          this._walkSince = this.t;
+        }
+        if (wc >= 0 && !(this.retreatUntil > this.t) && !(this._holdUntil > this.t)) {
+          const me = this.chestG.clone().multiplyScalar(this.scale), f0 = horiz(this.fwd).normalize();
+          for (const o of this.walkOthers(wc)) {
+            if (o.retreatUntil > o.t) continue;
+            const dv = o.chestG.clone().multiplyScalar(o.scale).sub(me);
+            dv.y = 0;
+            const d2 = dv.length();
+            if (d2 > 1 || d2 < 1e-3) continue;
+            dv.divideScalar(d2);
+            const oMove = !!o.jump || o.state === "move" && o.speed > 0.05, oF = horiz(o.fwd).normalize();
+            const iGo = this.speed > 0.02 && f0.dot(dv) > 0.3, theyCome = oMove && oF.dot(dv) < -0.3;
+            if (!iGo && !theyCome) continue;
+            if (iGo && oMove && !theyCome && oF.dot(f0) > 0.3) continue;
+            const since = (k) => {
+              var _a;
+              return k.jump ? Infinity : k._walkC === wc ? (_a = k._walkSince) != null ? _a : -1 : -1;
+            };
+            const yielder = !theyCome ? this : since(this) !== since(o) ? since(this) > since(o) ? this : o : this.id > o.id ? this : o;
+            const stayer = yielder === this ? o : this;
+            if (yielder.retreatFrom(stayer, { off: wc })) {
+              stayer._holdUntil = stayer.t + 2.5;
+              yielder._holdUntil = 0;
+            } else if (!stayer.jump && stayer.retreatFrom(yielder, { off: wc })) {
+              yielder._holdUntil = yielder.t + 2.5;
+              stayer._holdUntil = 0;
+            } else continue;
+            if (this.retreatUntil > this.t || this._holdUntil > this.t) return;
+          }
+        }
+      }
       if (!(typeof window !== "undefined" && window.__noLookAhead) && this.world.occupied && !(this.retreatUntil > this.t) && (this._lookT = (this._lookT || 0) - dt) <= 0) {
         this._lookT = 0.2;
         const W = this.world, f0 = horiz(this.fwd).normalize();
@@ -2944,7 +2994,13 @@ window.createCatKit = function(THREE) {
       }
       this.passing = pass ? pass.o : null;
       this.lane += ((pass ? pass.lat : 0) - this.lane) * damp(5, dt);
-      let blocked = this.world.occupied && (this.world.occupied(this.chestG.clone().addScaledVector(this.fwd, 0.1), 0.15, this) || this.world.occupied(this.chestG.clone().addScaledVector(this.fwd, 0.22), 0.15, this));
+      let bdir = this.fwd;
+      if (!(typeof window !== "undefined" && window.__oldBlockDir)) {
+        const u2 = Math.min(1, (c.s + 0.12) / c.len), tg2 = c.curve.getPointAt(u2).sub(c.curve.getPointAt(c.s / c.len));
+        tg2.y = 0;
+        if (tg2.lengthSq() > 1e-6) bdir = tg2.normalize();
+      }
+      let blocked = this.world.occupied && (this.world.occupied(this.chestG.clone().addScaledVector(bdir, 0.1), 0.15, this) || this.world.occupied(this.chestG.clone().addScaledVector(bdir, 0.22), 0.15, this));
       let hold = false;
       if (blocked && pass && blocked === pass.o) {
         if (pass.sepNow >= pass.sep - 0.015) {
@@ -2987,7 +3043,7 @@ window.createCatKit = function(THREE) {
       const postW = Math.max(this.post.sit, this.post.loaf, this.post.stretch, this.post.curl || 0);
       if (postW > 0.06) vt = 0;
       this.speed += clamp(vt - this.speed, -acc * 2.5 * dt, acc * dt);
-      this.speed = blocked || hold || postW > 0.06 ? Math.max(this.speed, 0) : Math.max(this.speed, 0.08);
+      this.speed = blocked || hold || postW > 0.06 || this._holdUntil > this.t ? Math.max(this.speed, 0) : Math.max(this.speed, 0.08);
       c.s = Math.min(c.len, c.s + this.speed * dt);
       this._tight = !!(c.tightLen && c.s < c.tightLen);
       const p = c.curve.getPointAt(c.s / c.len);
@@ -3170,9 +3226,10 @@ window.createCatKit = function(THREE) {
     }
     // 振り返って引き返す：来た側（後ろ）の 0.6〜2.5m 先の、空いている道の点へ向かう。決めたら 5 秒は鉢合わせで迷い直さない
     // 名前を turnBack にすると、下の元からある turnBack()（行き先をあきらめる）に上書きされて一度も動かなかった（2026-10-16）
-    retreatFrom(o) {
+    retreatFrom(o, opt) {
+      opt = opt || {};
       const hist = (this._retreatHist || []).filter((t) => this.t - t < 20);
-      if (hist.length >= 2) {
+      if (hist.length >= 2 && !opt.off) {
         this._retreatHist = hist;
         return false;
       }
@@ -3185,8 +3242,9 @@ window.createCatKit = function(THREE) {
         const n = nav.nodes[k], dx = n.x - this.chestG.x, dz = n.z - this.chestG.z, d = Math.hypot(dx, dz);
         if (d < 0.6 || d > 2.5 || Math.abs(n.y - this.chestG.y) > 0.6) continue;
         const dot = (dx * back.x + dz * back.z) / d;
-        if (dot < 0.5) continue;
+        if (dot < (opt.off !== void 0 ? 0.2 : 0.5)) continue;
         if (w.occupied && w.occupied(v(n.x, n.y, n.z), 0.35, this)) continue;
+        if (opt.off !== void 0 && nav.comp[k] === opt.off) continue;
         cands.push([dot + Math.min(d, 1.5) * 0.3 + Math.random() * 0.2 + (nav.comp && nav.comp[k] === nav.comp[k0] ? 1 : 0), k, d]);
       }
       cands.sort((a, b) => b[0] - a[0]);
@@ -3999,6 +4057,62 @@ window.createCatKit = function(THREE) {
     // 跳び移り先が別のネコの板なら跳ばずに待つ（相手が休んでいれば 0.4 秒、動いていれば 2.5 秒で諦めて別の道へ）。道選びでも避ける
     boardComp(k) {
       return k >= 0 && this.oneCatBoard(k) ? this.world.nav.comp[k] : -1;
+    }
+    // 細長いウォーク（2026-10-17 Naoya「最上段ウォークで衝突。2 匹乗ってもよいが衝突前に引き返し別のステップに移る」）：
+    // 幅（短いほうの差し渡し）32cm 以下・長さ 60cm 以上の板。向きは点の並びの主軸で見る（斜めの板も拾う）。当てはまれば面の番号、違えば -1
+    walkComp(k) {
+      const nav = this.world.nav;
+      if (!nav || !nav.comp || k === void 0 || k < 0) return -1;
+      const c = nav.comp[k];
+      if (c < 0) return -1;
+      const WM = nav._walks || (nav._walks = /* @__PURE__ */ new Map());
+      if (!WM.has(c)) {
+        let n = 0, sx = 0, sz = 0;
+        nav.nodes.forEach((q, i) => {
+          if (nav.comp[i] === c) {
+            n++;
+            sx += q.x;
+            sz += q.z;
+          }
+        });
+        const mx = sx / n, mz = sz / n;
+        let xx = 0, zz = 0, xz = 0;
+        nav.nodes.forEach((q, i) => {
+          if (nav.comp[i] === c) {
+            const dx = q.x - mx, dz = q.z - mz;
+            xx += dx * dx;
+            zz += dz * dz;
+            xz += dx * dz;
+          }
+        });
+        const a = 0.5 * Math.atan2(2 * xz, xx - zz), ux = Math.cos(a), uz = Math.sin(a);
+        let l0 = 1e9, l1 = -1e9, w0 = 1e9, w1 = -1e9;
+        nav.nodes.forEach((q, i) => {
+          if (nav.comp[i] === c) {
+            const dx = q.x - mx, dz = q.z - mz, l = dx * ux + dz * uz, w = -dx * uz + dz * ux;
+            l0 = Math.min(l0, l);
+            l1 = Math.max(l1, l);
+            w0 = Math.min(w0, w);
+            w1 = Math.max(w1, w);
+          }
+        });
+        WM.set(c, { len: l1 - l0, wid: w1 - w0, bed: (nav.beds || []).some((b) => b.comp === c) });
+      }
+      const o = WM.get(c), sc = this.scale || 1;
+      return !o.bed && o.wid * sc <= 0.32 && o.len * sc >= 0.6 ? c : -1;
+    }
+    // ウォーク wc の上（跳んで降りてくる途中も含む）にいる別のネコ（実寸の位置つき）
+    walkOthers(wc) {
+      const out = [], cats = this.world.cats ? this.world.cats() : [];
+      for (const o of cats) {
+        if (o === this) continue;
+        const J = o.jump;
+        const q = J && J.B && ["launch", "flight", "land"].includes(J.phase) ? J.B : o.chestG;
+        const kk = this.world.nearestNode(q.clone().multiplyScalar(o.scale / this.scale), 0.3);
+        if (kk < 0 || this.world.nav.comp[kk] !== wc) continue;
+        out.push(o);
+      }
+      return out;
     }
     // 1 匹だけの板：差し渡し 55cm 以下・点 100 個以下（実寸）。smallBoard（40cm・40 個。着地で板の真ん中に体を収める判定）より広め。
     // 左壁の最上段のステップ（40cm を少し超える）に 2 匹が乗って重なった（2026-10-16 Naoya「このステップへの 2 匹乗りを禁止」）
