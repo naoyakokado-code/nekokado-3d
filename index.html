@@ -427,7 +427,7 @@ document.body.classList.add('mobile');   /* 2026-10-13 Naoya：PC もスマホ�
 </div>
 <div id="catedit" class="card"><div id="cats1"></div></div>
 <div id="credit">DESIGNED BY NEKONOMACHIKADO</div>
-<div id="ver">Ver. 1017.14</div>
+<div id="ver">Ver. 1017.15</div>
 <div id="headline"></div>
 <div id="veil"><img id="veilImg" alt="" src="sites/case1_thumb.acfb2fdf20.jpg"><div id="veilLoad"><div>読み込み中</div><div class="bar none"><i></i></div></div></div>
 <button id="tourPrev" class="tourbtn" aria-label="前のモデル"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 L8 12 L15 19"/></svg></button>
@@ -2869,7 +2869,33 @@ window.createCatKit = function(THREE) {
       this.rig.apply(this.solvePose(dt));
     }
     // 道をたどる
+    // 迷ってから動く（2026-10-17 Naoya「迷いによる体のねじれがまだ残る。行動に起こさずに迷わせ、判断後に動きを乗せる手順は可能か」）。
+    // 譲り合い・引き返し・あきらめての選び直し・回り込みで道を決め直したら、0.5〜0.9 秒その場で止まり、視線だけを新しく進む先へ向けて
+    // から歩き出す。決めた瞬間に体ごと新しい道へ動き出していたので、判断が切り替わるたびに胴が逆へ引っ張られてねじれた。
+    // 止まっている間は次の判断もしない（判断が二転三転しない）
+    ponder() {
+      if (typeof window !== "undefined" && window.__noPonder) return;
+      this._ponderUntil = this.t + 0.5 + Math.random() * 0.4;
+      this.speed = 0;
+      if (this.vel) this.vel.set(0, 0, 0);
+    }
+    ponderLook() {
+      const nav = this.world.nav, it = this.cur || this.plan[0];
+      if (!it) return;
+      let q = null;
+      if (it.type === "walk") {
+        const ns = it.nodes || [];
+        q = ns.find((p) => Math.hypot(p.x - this.chestG.x, p.z - this.chestG.z) > 0.3) || ns[ns.length - 1];
+      } else if (it.b !== void 0) q = nav.nodes[it.b];
+      if (q) this.look = v(q.x, q.y, q.z).addScaledVector(UP, 0.12);
+    }
     runPlan(dt) {
+      if (this._ponderUntil > this.t) {
+        this.speed = 0;
+        this.vel.set(0, 0, 0);
+        this.ponderLook();
+        return;
+      }
       if (!this.cur) {
         this.cur = this.plan.shift();
         if (!this.cur) return this.arrive();
@@ -3282,6 +3308,7 @@ window.createCatKit = function(THREE) {
           this.cur = null;
           this.speed = 0;
           this.waitT = 0;
+          this.ponder();
           return true;
         }
       }
@@ -3302,6 +3329,7 @@ window.createCatKit = function(THREE) {
           this.waitT = 0;
           this.gaitWant = "walk";
           this.goal = k;
+          this.ponder();
           return true;
         }
       }
@@ -3398,6 +3426,7 @@ window.createCatKit = function(THREE) {
       this.retreatN = (this.retreatN || 0) + 1;
       hist.push(this.t);
       this._retreatHist = hist;
+      this.ponder();
       return true;
     }
     // 道を塞いでいるのでどく（止まっているネコ）。who の進む向きと直角に 0.35m ほど
@@ -3440,6 +3469,7 @@ window.createCatKit = function(THREE) {
       this.waitT = 0;
       this.state = "idle";
       if (!this.wander()) this.setAct("stand", 0.6 + Math.random() * 0.8);
+      else this.ponder();
     }
     waitFor(dt) {
       this.waitT = (this.waitT || 0) + dt;
@@ -5214,7 +5244,7 @@ window.createCatKit = function(THREE) {
     }
     // ---------------- 関節の位置を組む
     solvePose(dt, rest) {
-      var _a, _b, _c, _d;
+      var _a, _b, _c, _d, _e;
       const P = this.post || { crouch: 0, sit: 0, loaf: 0, stretch: 0, groom: 0, curl: 0 };
       const J = this.jump;
       const f = this.fwdR().clone(), L = leftOf(f);
@@ -5272,6 +5302,18 @@ window.createCatKit = function(THREE) {
         chest.y -= 0.02 * this.crawl;
         pelvis.y -= 0.02 * this.crawl;
         arch -= 4e-3 * this.crawl;
+      }
+      if (J && J.up && ["aim", "creep", "wiggle", "crouch"].includes(J.phase) && J.B && !(typeof window !== "undefined" && window.__oldVertPrep)) {
+        const hz = Math.hypot(J.B.x - this.chestG.x, J.B.z - this.chestG.z), dz = J.B.y - this.chestG.y;
+        const vf = dz > 0.2 ? clamp((dz / Math.max(hz, 0.01) - 1) / 1.5, 0, 1) : 0;
+        const k = vf * (J.phase === "aim" ? smooth(0, 0.3, J.t) : 1) * clamp((((_c = this.ceil) != null ? _c : 1) - 0.35) / 0.15, 0, 1);
+        if (k > 0) {
+          chest.y += 0.035 * k + 0.035 * Math.max(0, P.crouch) * k;
+          pelvis.y -= 0.025 * k;
+          const g = new V3(chest.x - pelvis.x, 0, chest.z - pelvis.z);
+          if (g.lengthSq() > 1e-8) pelvis.addScaledVector(g.normalize(), 0.03 * k);
+          arch -= 0.015 * k;
+        }
       }
       const cr = P.crouch;
       chest.y -= 0.04 * cr;
@@ -5594,7 +5636,7 @@ window.createCatKit = function(THREE) {
       const hf = bodyAxis ? new V3().subVectors(chest, pelvis).normalize() : f;
       const hu = bodyAxis ? UP.clone().addScaledVector(hf, -UP.dot(hf)).normalize() : UP;
       const neckBase = chest.clone().addScaledVector(hf, 0.04).addScaledVector(hu, 0.012);
-      let hUp = 0.03 + 0.03 * P.sit - 0.02 * P.loaf - 0.025 * P.stretch - 0.02 * Math.max(0, P.crouch) - 0.045 * ((_d = (_c = this._duckC) != null ? _c : this.duck) != null ? _d : 0) - 0.015 * (this.crawl || 0);
+      let hUp = 0.03 + 0.03 * P.sit - 0.02 * P.loaf - 0.025 * P.stretch - 0.02 * Math.max(0, P.crouch) - 0.045 * ((_e = (_d = this._duckC) != null ? _d : this.duck) != null ? _e : 0) - 0.015 * (this.crawl || 0);
       let hFw = 0.07 + 0.01 * P.stretch + 8e-3 * P.sit - 0.02 * P.loaf;
       if (this.gaitName === "run" && this.speed > 1.3) {
         hUp -= 0.02;
