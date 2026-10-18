@@ -431,7 +431,7 @@ document.body.classList.add('mobile');   /* 2026-10-13 Naoya：PC もスマホ�
 </div>
 <div id="catedit" class="card"><div id="cats1"></div></div>
 <div id="credit">DESIGNED BY NEKONOMACHIKADO</div>
-<div id="ver" data-vers="{&quot;common&quot;: 5, &quot;scenes&quot;: {&quot;1&quot;: 0, &quot;2&quot;: 0, &quot;3&quot;: 0}}">Ver. 5</div>
+<div id="ver" data-vers="{&quot;common&quot;: 6, &quot;scenes&quot;: {&quot;1&quot;: 0, &quot;2&quot;: 0, &quot;3&quot;: 0}}">Ver. 6</div>
 <div id="headline"></div>
 <div id="veil"><img id="veilImg" alt="" src="sites/case1_thumb.acfb2fdf20.jpg"><div id="veilLoad"><div>読み込み中</div><div class="bar none"><i></i></div></div></div>
 <button id="tourPrev" class="tourbtn" aria-label="前のモデル"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 L8 12 L15 19"/></svg></button>
@@ -5723,7 +5723,7 @@ window.createCatKit = function(THREE) {
       if (P.sit > 1e-3) {
         const sa = this.rig.sitAdj || { pu: 0, pf: 0, cu: 0, cf: 0 };
         blend(pelvis, P.sit, this.pelvisG.clone().addScaledVector(pf, 0.05 + sa.pf).addScaledVector(UP, 0.072 * kh + sa.pu));
-        blend(chest, P.sit, this.chestG.clone().addScaledVector(f, sa.cf + (typeof window !== "undefined" && window.__sitChestF !== void 0 ? window.__sitChestF : 0.03)).addScaledVector(UP, (typeof window !== "undefined" && window.__sitChestH !== void 0 ? window.__sitChestH : 0.19) * kc + sa.cu));
+        blend(chest, P.sit, this.chestG.clone().addScaledVector(f, sa.cf + (typeof window !== "undefined" && window.__sitChestF !== void 0 ? window.__sitChestF : 0.01)).addScaledVector(UP, (typeof window !== "undefined" && window.__sitChestH !== void 0 ? window.__sitChestH : 0.215) * kc + sa.cu));
         arch = lerp(arch, typeof window !== "undefined" && window.__sitArch !== void 0 ? window.__sitArch : 0, P.sit);
       }
       if (P.loaf > 1e-3) {
@@ -5982,7 +5982,17 @@ window.createCatKit = function(THREE) {
       const axB = new V3().subVectors(chest, pelvis).normalize();
       let axW = J && J.phase === "flight" ? 1 : LEAN_SPINE && J && J.phase === "lean" ? smooth(0, 0.6, J.lean || 0) : 0;
       if (P.sit > 1e-3) axW = Math.max(axW, P.sit * (typeof window !== "undefined" && window.__sitAxW !== void 0 ? window.__sitAxW : 1));
-      const tP = axW >= 1 ? axB : pf.clone().lerp(axB, axW).normalize(), tC = axW >= 1 ? axB : f.clone().lerp(axB, axW).normalize();
+      let tP = axW >= 1 ? axB : pf.clone().lerp(axB, axW).normalize(), tC = axW >= 1 ? axB : f.clone().lerp(axB, axW).normalize();
+      const arcDeg = typeof window !== "undefined" && window.__sitArc !== void 0 ? window.__sitArc : 0;
+      if (P.sit > 1e-3 && arcDeg) {
+        const nB = UP.clone().addScaledVector(axB, -UP.dot(axB));
+        if (nB.lengthSq() > 1e-6) {
+          nB.normalize();
+          const th = arcDeg * Math.PI / 180 * P.sit, cs = Math.cos(th), sn = Math.sin(th);
+          tP = axB.clone().multiplyScalar(cs).addScaledVector(nB, sn).normalize();
+          tC = axB.clone().multiplyScalar(cs).addScaledVector(nB, -sn).normalize();
+        }
+      }
       if (LEAN_SPINE && J && J.phase === "lean") arch += (J.up ? 0.01 : 0.02) * (J.lean || 0);
       let archN = UP, a1 = arch, a2 = arch;
       if (P.sit > 1e-3 && typeof window !== "undefined" && (window.__sitBackPerp || window.__oldSitBack === false)) {
