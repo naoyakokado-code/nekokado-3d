@@ -433,7 +433,7 @@ document.body.classList.add('mobile');   /* 2026-10-13 Naoya：PC もスマホ�
 </div>
 <div id="catedit" class="card"><div id="cats1"></div></div>
 <div id="credit">DESIGNED BY NEKONOMACHIKADO</div>
-<div id="ver" data-vers="{&quot;common&quot;: 11, &quot;scenes&quot;: {&quot;1&quot;: 0, &quot;2&quot;: 0, &quot;3&quot;: 0}}">Ver. 11</div>
+<div id="ver" data-vers="{&quot;common&quot;: 11, &quot;scenes&quot;: {&quot;1&quot;: 1, &quot;2&quot;: 0, &quot;3&quot;: 0}}">Ver. 11</div>
 <div id="headline"></div>
 <div id="veil"><img id="veilImg" alt="" src="sites/case1_thumb.acfb2fdf20.jpg"><div id="veilLoad"><div>読み込み中</div><div class="bar none"><i></i></div></div></div>
 <button id="tourPrev" class="tourbtn" aria-label="前のモデル"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 L8 12 L15 19"/></svg></button>
@@ -1787,7 +1787,7 @@ window.createCatKit = function(THREE) {
   const SPINE_NAMES = Array.from({ length: 7 }, (_, i) => "spL" + (i + 1)).concat(Array.from({ length: 13 }, (_, i) => "spT" + (i + 1)));
   const SPINE_START = 0.22;
   const spineFrac = (k) => SPINE_START + k * (1 - SPINE_START) / SPINE_NAMES.length;
-  const SCR_SLIDE = 0.045;
+  const SCR_SLIDE = 0.03;
   const TAILQ_NAMES = Array.from({ length: 16 }, (_, i) => "tailq" + (i + 1));
   function withSpine(W) {
     var _a, _b, _c;
@@ -4154,7 +4154,7 @@ window.createCatKit = function(THREE) {
           }
           this.settle = null;
           this._scrGoal = null;
-          this._scr = { p, t0: this.t, hi: Math.random(), rate: 2.2 + Math.random() * 0.8 };
+          this._scr = { p, t0: this.t, hi: Math.random(), rate: typeof window !== "undefined" && window.__oldScrStroke ? 2.2 + Math.random() * 0.8 : 1.3 + Math.random() * 0.4 };
           this.setAct("scratch", 3 + Math.random() * 3);
           return;
         }
@@ -6110,19 +6110,36 @@ window.createCatKit = function(THREE) {
         const S2 = this.scratchFrame(), k = P.scratch, sf = S2.f, sL = leftOf(sf), p = this._scr.p;
         const hip = S2.hipG.clone().addScaledVector(UP, D.hipH * (0.62 + 0.18 * this._scr.hi));
         const ch = hip.clone().addScaledVector(sf, S2.Ls * Math.cos(S2.a)).addScaledVector(UP, S2.Ls * Math.sin(S2.a));
+        const tt = this.t - this._scr.t0, go = smooth(0.35, 0.8, tt), ph = tt * this._scr.rate * Math.PI * 2;
+        if (!(typeof window !== "undefined" && window.__oldScrStroke)) {
+          ch.addScaledVector(UP, -0.01 * go * (0.5 + 0.5 * Math.cos(2 * ph)));
+          ch.addScaledVector(sL, 6e-3 * go * Math.sin(ph));
+        }
         blend(pelvis, k, hip);
         blend(chest, k, ch);
         arch = lerp(arch, -0.012, k);
         const legF = D.humerus + D.radius + D.pastern, sh = ch.clone().addScaledVector(UP, -0.032).addScaledVector(new V3().subVectors(ch, hip).normalize(), SCR_SLIDE);
-        const tt = this.t - this._scr.t0, go = smooth(0.35, 0.8, tt), ph = tt * this._scr.rate * Math.PI * 2;
         this._scrPaw = [0, 1].map((s2) => {
           const ang = (s2 === 0 ? 1 : -1) * 0.56, d0 = sf.clone().negate().applyAxisAngle(UP, ang);
           const q = v(p.x, 0, p.z).addScaledVector(d0, p.r + 6e-3);
           const dh = Math.hypot(q.x - sh.x, q.z - sh.z), reach = legF * (typeof window !== "undefined" && window.__scrReach || 0.96);
           q.y = sh.y + Math.sqrt(Math.max(0, reach * reach - dh * dh));
-          const c = Math.sin(ph + s2 * Math.PI);
-          q.y += go * (0.022 * Math.cos(ph + s2 * Math.PI));
-          q.addScaledVector(d0, go * 0.012 * Math.max(0, -c));
+          if (typeof window !== "undefined" && window.__oldScrStroke) {
+            const c = Math.sin(ph + s2 * Math.PI);
+            q.y += go * (0.022 * Math.cos(ph + s2 * Math.PI));
+            q.addScaledVector(d0, go * 0.012 * Math.max(0, -c));
+          } else {
+            const u = ((ph + s2 * Math.PI) / (Math.PI * 2) % 1 + 1) % 1, Dn = 0.5 * legF * go;
+            let down, lift2 = 0;
+            if (u < 0.62) down = smooth(0, 1, u / 0.62);
+            else {
+              const r = (u - 0.62) / 0.38;
+              down = 1 - smooth(0, 1, r);
+              lift2 = 0.025 * go * Math.sin(Math.PI * r);
+            }
+            q.y -= Dn * down;
+            q.addScaledVector(d0, lift2);
+          }
           q.y = Math.min(q.y, p.y1 - 0.03);
           return q;
         });
@@ -6542,7 +6559,9 @@ window.createCatKit = function(THREE) {
         if (P.loaf > 0.3) pd.lerp(f.clone().negate().addScaledVector(UP, 0.3), P.loaf).normalize();
         const wr = fpw.clone().addScaledVector(pd, D.pastern);
         const el = new V3(), wrEnd = new V3();
-        ik2(shoulders[s], wr, D.humerus, D.radius, f.clone().negate().add(sideOut), el, wrEnd);
+        const elHint = f.clone().negate().add(sideOut);
+        if (this._scr && P.scratch > 1e-3 && !(typeof window !== "undefined" && window.__oldScrStroke)) elHint.lerp(f.clone().multiplyScalar(-0.35).addScaledVector(UP, -1).add(sideOut), P.scratch);
+        ik2(shoulders[s], wr, D.humerus, D.radius, elHint, el, wrEnd);
         const armLow = Math.max(P.loaf, P.stretch);
         if (armLow > 0.05 && this.rig.pad) {
           const g = fpw.y - this.rig.pad.front, armR = this.rig.armR || 0.016;
