@@ -286,7 +286,7 @@
   /* ポインターモード（2026-11-26・画面共有で見せる用） */
   #ptrBtn { position: fixed; left: calc(18px + 100px + var(--insetL, 0px)); bottom: calc(18px + var(--insetB, 0px)); z-index: 7;
     display: flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
-  #ptrBtn.on { background: #ffd84d; border-color: #f0b400; color: #2d2a26; }
+  #ptrBtn.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }   /* 2026-11-26 Naoya「ボタンの黄色もなくして」：上の案の切り替えと同じ色 */
   @media (hover: none) { #ptrBtn { display: none; } }   /* 指の端末には出さない（画面共有はマウスの PC から） */
   /* 2026-11-26 Naoya「指している点が把握しにくい。カーソルを強調するようなもののほうが適している」：塗りの赤丸をやめ、
      大きめの矢印（先が指している点）＋そのまわりの薄い黄色の輪（プレゼンのカーソル強調と同じ見せ方）。点そのものは隠さない */
@@ -11443,7 +11443,7 @@ function testScene() {
   <div id="wpGrid"></div>
   <div class="wpNote">壁紙の面をタッチしても選べます。柄の大きさは目安です。</div>
 </div>
-<button id="ptrBtn" class="card" title="ポインターに切り替え（P）"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8.5" fill="rgba(255,214,0,.35)" stroke="none"/><path d="M8 6 L8 17 L10.6 14.6 L12.4 18.8 L14 18.1 L12.3 14 L15.8 14 Z" fill="#fff" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>ネズミ</span></button>
+<button id="ptrBtn" class="card" title="ポインターに切り替え（P）"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6 L8 17 L10.6 14.6 L12.4 18.8 L14 18.1 L12.3 14 L15.8 14 Z" fill="#fff" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>ネズミ</span></button>
 <div id="ptrDot"><svg viewBox="0 0 15 20"><path d="M1 1 L1 16 L4.6 12.6 L7.2 18.6 L9.6 17.6 L7.1 11.8 L12 11.8 Z" fill="#fff" stroke="#111" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
 </body>
 </html>
