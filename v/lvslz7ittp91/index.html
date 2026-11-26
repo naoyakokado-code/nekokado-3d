@@ -292,7 +292,7 @@
      大きめの矢印（先が指している点）＋そのまわりの薄い黄色の輪（プレゼンのカーソル強調と同じ見せ方）。点そのものは隠さない */
   /* 2026-11-26 Naoya「ポインタの黄色をなくしてクリックしたときのアクションのみ残す」：まわりの黄色い輪は外し、矢印とクリックの波紋だけ */
   #ptrDot { position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 30; pointer-events: none; opacity: 0; transition: opacity .12s; }
-  #ptrDot svg { position: absolute; left: -2px; top: -2px; width: 30px; height: 40px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+  #ptrDot svg { position: absolute; left: -1px; top: -1px; width: 15px; height: 20px;   /* 2026-11-26 Naoya「カーソルサイズを半分に」（30×40 → 15×20） */ filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
   .ptrRipple { position: fixed; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; border: 4px solid rgba(255, 170, 0, .95);
     box-shadow: 0 0 0 2px rgba(255,255,255,.9); pointer-events: none; z-index: 29; animation: ptrRip .85s ease-out forwards; }
   @keyframes ptrRip { from { transform: scale(.6); opacity: 1; } to { transform: scale(3.4); opacity: 0; } }
