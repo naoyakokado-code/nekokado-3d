@@ -283,6 +283,17 @@
   .wpItem .wpOrig { display: grid; place-items: center; background: var(--chip); font-size: 18px; color: var(--sub); }
   .wpItem.on { border-color: var(--accent); }
   .wpNote { margin-top: 8px; font-size: 11px; color: var(--sub); }
+  /* ポインターモード（2026-11-26・画面共有で見せる用） */
+  #ptrBtn { position: fixed; left: calc(18px + 100px + var(--insetL, 0px)); bottom: calc(18px + var(--insetB, 0px)); z-index: 7;
+    display: flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
+  #ptrBtn.on { background: #e5372b; border-color: #e5372b; color: #fff; }
+  @media (hover: none) { #ptrBtn { display: none; } }   /* 指の端末には出さない（画面共有はマウスの PC から） */
+  #ptrDot { position: fixed; left: 0; top: 0; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; z-index: 30;
+    background: radial-gradient(circle, #ff3b2f 0 46%, rgba(255,59,47,.35) 47% 100%); border: 3px solid #fff;
+    box-shadow: 0 0 0 2px rgba(0,0,0,.35), 0 2px 10px rgba(0,0,0,.35); pointer-events: none; opacity: 0; transition: opacity .12s; }
+  .ptrRipple { position: fixed; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; border: 4px solid #ff3b2f;
+    box-shadow: 0 0 0 2px #fff; pointer-events: none; z-index: 29; animation: ptrRip .85s ease-out forwards; }
+  @keyframes ptrRip { from { transform: scale(.6); opacity: 1; } to { transform: scale(3.4); opacity: 0; } }
 </style>
 <script>
 /* 表示できないときの知らせ（2026-10-16 Naoya「来場者が手元で触る。問い合わせを減らせるようにエラーメッセージを作り込む」）。
@@ -8718,6 +8729,55 @@ addEventListener('pointermove', e => {
 }, true);
 window.__wp = WP;
 // ---- 壁紙コンフィギュレーター ここまで ----
+// ---- ポインターモード（2026-11-26 Naoya「ビデオ通話で 3D ビューを画面共有で見せながら打ち合わせをする際、ネズミカーソルだと
+// ステップの位置しか指せないのでカーソルモードとの切り替えをできるようにしたい。カーソルは相手が見やすい形に」）----
+// ・ポインターのあいだは、ネズミを出さず、クリックでネコを呼ばない（ドラッグで視点を回す・壁紙のタッチは今までどおり）
+// ・印はページの中に描く（OS のカーソルは画面共有で小さく映るか、映らないことがある）。大きな赤い点に白い縁と影、クリックで波紋
+// ・切り替えは左下のボタンか P キー。選んだほうはこの端末で覚える
+const PTR = { on: false, el: null, x: -99, y: -99 };
+function ptrSet(on) {
+  PTR.on = !!on;
+  document.body.classList.toggle('ptrMode', PTR.on);
+  const b = $('ptrBtn'); b.classList.toggle('on', PTR.on); b.querySelector('span').textContent = PTR.on ? 'ポインター' : 'ネズミ';
+  b.title = PTR.on ? 'ネズミに切り替え（P）' : 'ポインターに切り替え（P）';
+  if (PTR.on && typeof teaser3d !== 'undefined' && !teaser3d.placed) teaser3d.g.visible = false;
+  if (!PTR.on) { PTR.el.style.opacity = 0; renderer.domElement.style.cursor = ''; }
+  try { localStorage.setItem('asadaPtr', PTR.on ? '1' : '0'); } catch (e) {}
+}
+PTR.el = $('ptrDot');
+$('ptrBtn').onclick = () => ptrSet(!PTR.on);
+addEventListener('keydown', e => {
+  if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|TEXTAREA|SELECT/.test((e.target && e.target.tagName) || '')) ptrSet(!PTR.on);
+});
+// 印を動かす。キャンバスの上だけ出す（ボタンや壁紙の窓の上では普段の矢印に戻す）
+addEventListener('pointermove', e => {
+  if (!PTR.on || e.pointerType !== 'mouse') return;
+  PTR.x = e.clientX; PTR.y = e.clientY;
+  const onCanvas = e.target === renderer.domElement;
+  PTR.el.style.transform = `translate(${PTR.x}px, ${PTR.y}px)`;
+  PTR.el.style.opacity = onCanvas ? 1 : 0;
+  if (onCanvas) setTimeout(() => {   // ネズミのカーソルの処理（あとから走る）を打ち消す
+    renderer.domElement.style.cursor = 'none';
+    if (typeof teaser3d !== 'undefined' && !teaser3d.placed) teaser3d.g.visible = false;
+  }, 0);
+}, true);
+renderer.domElement.addEventListener('pointerleave', () => { if (PTR.on) PTR.el.style.opacity = 0; });
+// クリック：波紋を出し、ネコを呼ぶ処理は止める（down を消す。知らせ自体は止めない＝視点の操作が取り残されない）
+let _ptrDown = null;
+addEventListener('pointerdown', e => { _ptrDown = PTR.on && e.target === renderer.domElement ? [e.clientX, e.clientY] : null; }, true);
+addEventListener('pointerup', e => {
+  if (!PTR.on || !_ptrDown || e.target !== renderer.domElement) return;
+  const click = Math.hypot(e.clientX - _ptrDown[0], e.clientY - _ptrDown[1]) <= 5;
+  down = null;
+  if (!click) return;
+  const r = document.createElement('div'); r.className = 'ptrRipple';
+  r.style.left = e.clientX + 'px'; r.style.top = e.clientY + 'px';
+  document.body.appendChild(r); setTimeout(() => r.remove(), 900);
+}, true);
+// 打ち合わせの前に選んだほうで始める（覚えていなければネズミ）
+// （ここはネズミの定義より前に読まれるので、読み終わってから。先に呼ぶと teaser3d が未定義で止まる）
+setTimeout(() => { let v = null; try { v = localStorage.getItem('asadaPtr'); } catch (e) {} ptrSet(v === '1'); }, 0);
+// ---- ポインターモード ここまで ----
 
 const shown = (o) => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
 
@@ -11378,5 +11438,7 @@ function testScene() {
   <div id="wpGrid"></div>
   <div class="wpNote">壁紙の面をタッチしても選べます。柄の大きさは目安です。</div>
 </div>
+<button id="ptrBtn" class="card" title="ポインターに切り替え（P）"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><circle cx="12" cy="12" r="8.5"/></svg><span>ネズミ</span></button>
+<div id="ptrDot"></div>
 </body>
 </html>
