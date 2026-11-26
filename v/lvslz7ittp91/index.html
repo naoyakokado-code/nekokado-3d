@@ -11033,7 +11033,22 @@ function findBridge() {
   const pa = rope.geometry.attributes.position, n = pa.count, u = new Float32Array(n), y0 = new Float32Array(n), q = new V3();
   for (let i = 0; i < n; i++) { q.fromBufferAttribute(pa, i).applyMatrix4(rope.matrixWorld); u[i] = alongX ? q.x : q.z; y0[i] = pa.getY(i); }
   const u0 = alongX ? rb.min.x : rb.min.z, u1 = alongX ? rb.max.x : rb.max.z;
-  return { rope, pa, u, y0, sy: new V3().setFromMatrixScale(rope.matrixWorld).y || 1, planks, u0, u1, alongX, rb, load: new Map(), sag: 0 };
+  const extra = [];
+  for (const m of meshes) {
+    if (m === rope || !m.geometry || planks.some(p => p.m === m) || (m.material && m.material.name) !== (rope.material && rope.material.name)) continue;   // 踏み板はひもと同じ材質。壁などを巻き込まない
+    const ga = m.geometry.attributes.position, inv = m.matrixWorld.clone().invert();
+    const o0 = new V3(0, 0, 0).applyMatrix4(inv), dl = new V3(0, -1, 0).applyMatrix4(inv).sub(o0);   // 世界の下 1m が部品の中でいくつか
+    const id = [], uu = [];
+    for (let i = 0; i < ga.count; i++) {
+      q.fromBufferAttribute(ga, i).applyMatrix4(m.matrixWorld);
+      if (q.x < rb.min.x - 0.05 || q.x > rb.max.x + 0.05 || q.z < rb.min.z - 0.05 || q.z > rb.max.z + 0.05 || q.y < rb.min.y - 0.05 || q.y > rb.max.y + 0.03) continue;   // 踏み板はひもの箱より少し出ている
+      id.push(i); uu.push(alongX ? q.x : q.z);
+    }
+    if (!id.length) continue;
+    const p0 = new Float32Array(id.length * 3); id.forEach((i, j) => { p0[j * 3] = ga.getX(i); p0[j * 3 + 1] = ga.getY(i); p0[j * 3 + 2] = ga.getZ(i); });
+    extra.push({ m, ga, id, u: uu, p0, dl });
+  }
+  return { rope, pa, u, y0, sy: new V3().setFromMatrixScale(rope.matrixWorld).y || 1, planks, extra, u0, u1, alongX, rb, load: new Map(), sag: 0 };
 }
 function updateBridge(dt) {
   if (bridge === undefined && meshes && meshes.length) bridge = findBridge();
@@ -11064,6 +11079,10 @@ function updateBridge(dt) {
   const pa = B.pa;
   for (let i = 0; i < pa.count; i++) pa.setY(i, B.y0[i] - sagAt(B.u[i]) / B.sy);
   pa.needsUpdate = true;
+  for (const X of B.extra || []) {
+    for (let j = 0; j < X.id.length; j++) { const s = sagAt(X.u[j]); X.ga.setXYZ(X.id[j], X.p0[j * 3] + X.dl.x * s, X.p0[j * 3 + 1] + X.dl.y * s, X.p0[j * 3 + 2] + X.dl.z * s); }
+    X.ga.needsUpdate = true;
+  }
   // ネコもその分下げる（乗っていないネコは 0）
   for (const c of cats) { const st = B.load.get(c); c.group.position.y = st && Math.abs(st.a) > 1e-5 ? -sagAt(c._bridgeU) : 0; }
 }
