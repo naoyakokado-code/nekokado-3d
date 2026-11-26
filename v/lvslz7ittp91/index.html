@@ -8741,6 +8741,7 @@ window.__wp = WP;
 const PTR = { on: false, el: null, x: -99, y: -99 };
 function ptrSet(on) {
   PTR.on = !!on;
+  window.__ptrOn = PTR.on;   // 毎コマの処理（updateTeaser のあと）がネズミを消す
   document.body.classList.toggle('ptrMode', PTR.on);
   const b = $('ptrBtn'); b.classList.toggle('on', PTR.on); b.querySelector('span').textContent = PTR.on ? 'ポインター' : 'ネズミ';
   b.title = PTR.on ? 'ネズミに切り替え（P）' : 'ポインターに切り替え（P）';
@@ -11169,6 +11170,7 @@ function frame(dt) {
   separateCats();
   updateBridge(dt * timeScale);
   updateTeaser(dt);
+  if (window.__ptrOn && teaser3d.g.visible) { teaser3d.placed = null; teaser3d.g.visible = false; }
   updateShadows();
   if (follow) {
     const p = follow.wpos; p.y += 0.15;
